@@ -50,7 +50,7 @@ function deleteSelect(e){
 }
 
 function createNewElement(e){
-return "<rect draggable='true' id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/><text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text><text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem</text>";
+return "<rect draggable='true' id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/><text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text><text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>";
 }
 
 
@@ -107,10 +107,12 @@ function changeText(){
 function fitToBox(displayText,fullText,x){
   let width = selected.getAttribute('width');
   let height = selected.getAttribute('height');
-  let numLines = height / 16
+  let numLines = height / 12
   const lines = []
   let lineLength = width / 8
   let words = fullText.innerHTML.split(" ");
+
+  displayText.innerHTML = "";
 
   let currLine = 0;
   let currPos = 0;
@@ -120,6 +122,10 @@ function fitToBox(displayText,fullText,x){
     if (currPos + wordLength > lineLength){
       currPos = wordLength
       currLine++
+      if (wordLength > lineLength){
+      lines[currLine] = "...";
+        break;
+      }
       lines[currLine] = words[i];
     }else{
       if (currLine == 0 && currPos == 0){
@@ -127,13 +133,23 @@ function fitToBox(displayText,fullText,x){
       }else{
         lines[currLine] += " " + words[i];
       }
-      currPos+= wordLength;
+      currPos += wordLength;
     }
   }
 
-  displayText.innerHTML = "";
+  if (lines[0] == undefined){
+    return 0;
+  }
+
   let newText;
-  for (let i = 0; i < Math.min(numLines,currLine); i++){
+  for (let i = 0; i <= currLine; i++){
+    if (i >= numLines - 1){
+      console.log(i);
+      newText = "<tspan dy = '10' dx = '0' x='"+x+"'>...</tspan>";
+      displayText.insertAdjacentHTML('beforeend', newText);
+
+      break;
+    }
     newText = "<tspan dy = '10' dx = '0' x='"+x+"'>"+lines[i]+"</tspan>";
     displayText.insertAdjacentHTML('beforeend', newText);
   }
