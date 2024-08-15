@@ -5,24 +5,32 @@ document.addEventListener("keydown", deleteSelect);
 let growing = false;
 let count = 0;
 let selected = null;
+let selectAtt = {};
 let posGrabbedX, posGrabbedY
 const circs = [] 
 let start;
+let connecting = false;
 
-function newElement(event){
+function newElement(e){
+  if (connecting == true){
+    removeLine();
+    return 0;
+  }
   if (selected != null && growing == false){
     unselect();
   }else if (!growing){
-    let newElement = createNewElement(event);
-    start = [event.clientX, event.clientY];
+    let newElement = createNewElement(e);
+    start = [e.clientX, e.clientY];
     area.insertAdjacentHTML('beforeend', newElement);
     selected = document.getElementById("rect"+count)
+    selectAtt = getAttributes(selected);
+    console.log(selectAtt);
     drawCircles();
     area.onmousemove = drawBox;
     count++
     growing = true;
   }else{
-    selected.addEventListener("mousedown", clickOnElement, false);
+    document.getElementById("g_"+(count-1)).addEventListener("mousedown", clickOnElement, false);
     unselect();
     area.onmousemove = null;
     growing = false;
@@ -30,17 +38,18 @@ function newElement(event){
 }
 
 function select(e){
-  selected = e.target;
-  drawCircles();
+  selected = e.currentTarget.firstChild;
+  selectAtt = getAttributes(selected);
+  drawCircles(e.target.firstChild);
 }
 
 function unselect(){
+  selectAtt = null;
   removeCircles();
   selected = null;
 }
 
 function deleteSelect(e){
-  console.log(e.keyCode);
   if (e.keyCode == 8 && selected != null){
     removeCircles();
     removeText();
@@ -49,8 +58,32 @@ function deleteSelect(e){
   }
 }
 
+function getAttributes(curr){
+  let obj = {
+    x : +curr.getAttribute('x'),
+    y : +curr.getAttribute('y'),
+    id : curr.getAttribute('id'),
+    width : +curr.getAttribute('width'),
+    height : +curr.getAttribute('height'),
+    yEnd : this.y+this.height,
+    xMid : this.x+(this.width/2),
+    xEnd : this.x+this.width,
+  }
+
+  obj.yMid = obj.y+(obj.height/2);
+  obj.yEnd = obj.y+obj.height;
+  obj.xMid = obj.x+(obj.width/2);
+  obj.xEnd = obj.x+obj.width;
+  
+  return obj;
+  
+}
+
 function createNewElement(e){
-return "<rect draggable='true' id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/><text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text><text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>";
+return "<g id='g_"+count+"'>"+"<rect draggable='true' id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/>"
++"<text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text>"
++"<text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>"
++"</g>"
 }
 
 
@@ -58,10 +91,15 @@ function clickOnElement(e) {
     if (growing == true){
       return 0;
     }
+    if (connecting == true){
+      connectBox(e);
+      e.stopPropagation();
+      return 0;
+    }
     e.stopPropagation();
     if (selected == null){
       select(e);
-    }else if (e.target != selected){
+    }else if (e.target.firstChild != selected){
       unselect();
       select(e);
     }
@@ -69,8 +107,8 @@ function clickOnElement(e) {
 }
 
 function startMovement(e){
-  posGrabbedX = e.clientX - selected.getAttribute('x');   
-  posGrabbedY = e.clientY - selected.getAttribute('y');   
+  posGrabbedX = e.clientX - selectAtt.x;   
+  posGrabbedY = e.clientY - selectAtt.y;   
   
   area.onmousemove = dragElement;
   area.onmouseup = dropElement;
@@ -78,11 +116,9 @@ function startMovement(e){
 
 function dragElement(e) {
   e.preventDefault();
-  width = selected.getAttribute('width');
-  height = selected.getAttribute('height');
   selected.setAttribute("x", e.clientX - posGrabbedX);
   selected.setAttribute("y", e.clientY - posGrabbedY);
-
+  selectAtt = getAttributes(selected);
   changeText();
   changeCircles();
 }
@@ -94,22 +130,17 @@ function dropElement() {
 }
 
 function changeText(){
-  x = +selected.getAttribute('x');
-  y = +selected.getAttribute('y');
-  id = selected.getAttribute('id');
-  fullText = document.getElementById("fullText_"+id)
-  displayText = document.getElementById("text_"+id)
-  displayText.setAttribute('x',x)
-  displayText.setAttribute('y',y)
-  fitToBox(displayText,fullText,x);
+  fullText = document.getElementById("fullText_"+selectAtt.id)
+  displayText = document.getElementById("text_"+selectAtt.id)
+  displayText.setAttribute('x',selectAtt.x)
+  displayText.setAttribute('y',selectAtt.y)
+  fitToBox(displayText,fullText);
 }
 
-function fitToBox(displayText,fullText,x){
-  let width = selected.getAttribute('width');
-  let height = selected.getAttribute('height');
-  let numLines = height / 12
+function fitToBox(displayText,fullText){
+  let numLines = selectAtt.height / 12
   const lines = []
-  let lineLength = width / 8
+  let lineLength = selectAtt.width / 8
   let words = fullText.innerHTML.split(" ");
 
   displayText.innerHTML = "";
@@ -144,7 +175,6 @@ function fitToBox(displayText,fullText,x){
   let newText;
   for (let i = 0; i <= currLine; i++){
     if (i >= numLines - 1){
-      console.log(i);
       newText = "<tspan dy = '10' dx = '0' x='"+x+"'>...</tspan>";
       displayText.insertAdjacentHTML('beforeend', newText);
 
@@ -157,75 +187,71 @@ function fitToBox(displayText,fullText,x){
 }
 
 function removeText(){
-  id = selected.getAttribute('id');
-  t = document.getElementById("text_"+id)
+  t = document.getElementById("text_"+selectAtt.id)
   t.remove();
 }
 
-function drawBox(event){
+function drawBox(e){
   let width, height;
   let x , y;
-  if (start[0] < event.pageX){
-    width = event.pageX - start[0];
+  if (start[0] < e.pageX){
+    width = e.pageX - start[0];
     x = start[0]
   }else{
-    width = start[0] - event.pageX;
-    x = event.pageX;
+    width = start[0] - e.pageX;
+    x = e.pageX;
   }
 
-  if (start[1] < event.pageY){
-    height = event.pageY - start[1]
+  if (start[1] < e.pageY){
+    height = e.pageY - start[1]
     y = start[1]
   }else{
-    height = start[1] - event.pageY
-    y = event.pageY
+    height = start[1] - e.pageY
+    y = e.pageY
   }
   selected.setAttribute("x", x);
   selected.setAttribute("y", y);
   selected.setAttribute("width", width);
   selected.setAttribute("height", height);
+
+  selectAtt = getAttributes(selected);
   changeCircles()
   changeText();
 }
 
 function drawCircles(){
-  x = +selected.getAttribute('x');
-  y = +selected.getAttribute('y');
-  width = +selected.getAttribute('width');
-  height = +selected.getAttribute('height');
-  id = selected.getAttribute('id');
-  
-  yMid = y+(height/2)
-  yEnd = y+height
-  
-  xMid = x+(width/2)
-  xEnd = x+width
+  x = selectAtt.x
+  y = selectAtt.y
+  yMid = selectAtt.yMid
+  yEnd = selectAtt.yEnd
+  xMid = selectAtt.xMid
+  xEnd = selectAtt.xEnd
 
   let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]];
   for (let i = 0; i < 8; i++ ){
-    newCirc = '<circle id="'+id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
+    newCirc = '<circle id="'+selectAtt.id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
     area.insertAdjacentHTML('beforeend', newCirc);
-    circs[i] = document.getElementById(id+"_"+i)
+    circs[i] = document.getElementById(selectAtt.id+"_"+i)
     circs[i].addEventListener("mousedown",expand);
   }
+  
+  linkCirc = '<circle id="'+selectAtt.id+'_link" r="10" cx="'+xMid+'" cy="'+yMid+'" fill="red" stroke="red"/>'
+  area.insertAdjacentHTML('beforeend', linkCirc);
+  circs[8] = document.getElementById(selectAtt.id+"_link")
+  circs[8].addEventListener("mousedown",linkBox);
 }
 
 function changeCircles(){
-  x = +selected.getAttribute('x');
-  y = +selected.getAttribute('y');
-  width = +selected.getAttribute('width');
-  height = +selected.getAttribute('height');
-  id = selected.getAttribute('id');
-  
-  yMid = y+(height/2)
-  yEnd = y+height
-  
-  xMid = x+(width/2)
-  xEnd = x+width
+  x = selectAtt.x
+  y = selectAtt.y
+  yMid = selectAtt.yMid
+  yEnd = selectAtt.yEnd
+  xMid = selectAtt.xMid
+  xEnd = selectAtt.xEnd
 
-  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]]
+  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd],[xMid,yMid]]
   
-  for (let i = 0; i<8; i++){
+  for (let i = 0; i<9; i++){
     circs[i].setAttribute("cx",pos[i][0])
     circs[i].setAttribute("cy",pos[i][1])
   }
@@ -233,11 +259,46 @@ function changeCircles(){
 }
 
 function removeCircles(){
-  id = selected.getAttribute('id');
-  for (let i = 0; i < 8; i++){
+  for (let i = 0; i < 9; i++){
     circs[i].remove();
     circs[i] = null;
   }
+}
+
+function linkBox(e){
+  connecting = true;
+  e.stopPropagation();
+  let newLine = "<line id='line_"+selectAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+e.pageX+"' y2='"+e.pageY+"' style='stroke:red;stroke-width:2'>";
+  area.insertAdjacentHTML('beforeend', newLine);
+
+  onmousemove = drawLine;
+}
+
+function drawLine(e){
+  line = document.getElementById("line_"+selectAtt.id)
+  line.setAttribute('x2',e.pageX)
+  line.setAttribute('y2',e.pageY)
+}
+
+function connectBox(e){
+  connecting = false;
+  let line = document.getElementById("line_"+selectAtt.id);
+  line.remove();
+
+  dest = e.currentTarget.firstChild;
+  destAtt = getAttributes(dest);
+  
+  let newLine = "<line id='line_"+selectAtt.id+"_"+destAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+destAtt.xMid+"' y2='"+destAtt.yMid+"' style='stroke:red;stroke-width:2'>";
+  area.insertAdjacentHTML('beforeend', newLine);
+
+  onmousemove = null
+}
+
+function removeLine(){
+  connecting = false;
+  let line = document.getElementById("line_"+selectAtt.id);
+  line.remove();
+  onmousemove = null
 }
 
 function expand(e){
@@ -265,54 +326,51 @@ function expand(e){
 
 
 function expandLeft(e){
-  x = +selected.getAttribute('x');
   newX = e.clientX;
-  
-  width = +selected.getAttribute('width');
-  newWidth = width + (x - newX);
+  newWidth = selectAtt.width + (selectAtt.x - newX);
   
   if (newWidth >10){
     selected.setAttribute('x',newX);
     selected.setAttribute('width',newWidth);
+    selectAtt = getAttributes(selected);
     changeCircles();
     changeText();
   }
 }
 
 function expandRight(e){
-  x = +selected.getAttribute('x');
-  newWidth = e.clientX - x;
+  newWidth = e.clientX - selectAtt.x;
   
   if (newWidth >10){
     selected.setAttribute('width',newWidth);
+    selectAtt = getAttributes(selected);
     changeCircles();
     changeText();
   }
 }
 
 function expandUp(e){
-  y = +selected.getAttribute('y');
   newY = e.clientY;
-  
-  
-  height = +selected.getAttribute('height');
-  newHeight = height + (y - newY); 
+  newHeight = selectAtt.height + (selectAtt.y - newY); 
+
   if (newHeight >10){
     selected.setAttribute('y',newY);
     selected.setAttribute('height',newHeight);
+    selectAtt = getAttributes(selected);
     changeCircles();
     changeText();
   }
 }
 
 function expandDown(e){
-  y = +selected.getAttribute('y');
-  newHeight = e.clientY - y;
+  newHeight = e.clientY - selectAtt.y;
   
   if (newHeight >10){
     selected.setAttribute('height',newHeight);
+    selectAtt = getAttributes(selected);
     changeCircles();
     changeText();
+    
   }
 }
 
