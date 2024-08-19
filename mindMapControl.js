@@ -25,14 +25,13 @@ function newElement(e){
     area.insertAdjacentHTML('beforeend', newElement);
     selected = document.getElementById("rect"+count)
     selectAtt = getAttributes(selected);
-    console.log(selectAtt);
+    mindGraph.set(selected,new Map([]));
     drawCircles();
     area.onmousemove = drawBox;
     count++
     growing = true;
   }else{
     document.getElementById("g_"+(count-1)).addEventListener("mousedown", clickOnElement, false);
-    mindGraph.set(selected,new Map([]));
     unselect();
     area.onmousemove = null;
     growing = false;
@@ -56,6 +55,7 @@ function deleteSelect(e){
     removeCircles();
     removeText();
     removeAllLinks();
+    selected.parentNode.remove();
     selected.remove();
     selected = null;
   }
@@ -299,7 +299,7 @@ function removeCircles(){
 function linkBox(e){
   connecting = true;
   e.stopPropagation();
-  let newLine = "<line id='line_"+selectAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+e.pageX+"' y2='"+e.pageY+"' style='stroke:red;stroke-width:2'>";
+  let newLine = "<line id='line_"+selectAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+e.pageX+"' y2='"+e.pageY+"'>";
   area.insertAdjacentHTML('beforeend', newLine);
 
   onmousemove = drawLine;
@@ -333,8 +333,8 @@ function connectBox(e){
 
   destAtt = getAttributes(dest);
   
-  let newLine = "<line id='line_"+selectAtt.id+"_"+destAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+destAtt.xMid+"' y2='"+destAtt.yMid+"' style='stroke:red;stroke-width:2'>";
-  area.insertAdjacentHTML('beforeend', newLine);
+  let newLine = "<line id='line_"+selectAtt.id+"_"+destAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+destAtt.xMid+"' y2='"+destAtt.yMid+"'>";
+  area.insertAdjacentHTML('afterbegin', newLine);
 
   let lineCreated = document.getElementById("line_"+selectAtt.id+"_"+destAtt.id);
   links = mindGraph.get(selected);

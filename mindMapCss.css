@@ -1,3 +1,8 @@
 .fullText{
     display: none;
 }
+
+line{
+    stroke:red;
+    stroke-width:5;
+}
