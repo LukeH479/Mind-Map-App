@@ -10,6 +10,7 @@ let posGrabbedX, posGrabbedY
 const circs = [] 
 let start;
 let connecting = false;
+let mindGraph = new Map([]);
 
 function newElement(e){
   if (connecting == true){
@@ -20,7 +21,7 @@ function newElement(e){
     unselect();
   }else if (!growing){
     let newElement = createNewElement(e);
-    start = [e.clientX, e.clientY];
+    start = [e.pageX, e.pageY];
     area.insertAdjacentHTML('beforeend', newElement);
     selected = document.getElementById("rect"+count)
     selectAtt = getAttributes(selected);
@@ -31,6 +32,7 @@ function newElement(e){
     growing = true;
   }else{
     document.getElementById("g_"+(count-1)).addEventListener("mousedown", clickOnElement, false);
+    mindGraph.set(selected,new Map([]));
     unselect();
     area.onmousemove = null;
     growing = false;
@@ -53,9 +55,21 @@ function deleteSelect(e){
   if (e.keyCode == 8 && selected != null){
     removeCircles();
     removeText();
+    removeAllLinks();
     selected.remove();
     selected = null;
   }
+}
+
+function removeAllLinks(){
+  allConnections = mindGraph.get(selected);
+  for (const x of allConnections.keys()) {
+    curr = mindGraph.get(x);
+    y = curr.get(selected);
+    y.line.remove();
+    curr.delete(y);
+  }
+  allConnections.delete(selected);
 }
 
 function getAttributes(curr){
@@ -107,8 +121,8 @@ function clickOnElement(e) {
 }
 
 function startMovement(e){
-  posGrabbedX = e.clientX - selectAtt.x;   
-  posGrabbedY = e.clientY - selectAtt.y;   
+  posGrabbedX = e.pageX - selectAtt.x;   
+  posGrabbedY = e.pageY - selectAtt.y;   
   
   area.onmousemove = dragElement;
   area.onmouseup = dropElement;
@@ -116,17 +130,36 @@ function startMovement(e){
 
 function dragElement(e) {
   e.preventDefault();
-  selected.setAttribute("x", e.clientX - posGrabbedX);
-  selected.setAttribute("y", e.clientY - posGrabbedY);
+  selected.setAttribute("x", e.pageX - posGrabbedX);
+  selected.setAttribute("y", e.pageY - posGrabbedY);
+  movedElement();
+}
+
+function movedElement(){
   selectAtt = getAttributes(selected);
   changeText();
   changeCircles();
+  changeLinks();
 }
 
 function dropElement() {
   area.onmouseup = null;
   area.onmousemove = null;
   
+}
+
+function changeLinks(){
+  allConnections = mindGraph.get(selected);
+  for (const x of allConnections.values()) {
+    if (x.startNode){
+      x.line.setAttribute('x1',selectAtt.xMid);
+      x.line.setAttribute('y1',selectAtt.yMid);
+    }else{
+      x.line.setAttribute('x2',selectAtt.xMid);
+      x.line.setAttribute('y2',selectAtt.yMid);
+    }
+  }
+
 }
 
 function changeText(){
@@ -187,8 +220,8 @@ function fitToBox(displayText,fullText){
 }
 
 function removeText(){
-  t = document.getElementById("text_"+selectAtt.id)
-  t.remove();
+  document.getElementById("text_"+selectAtt.id).remove();
+  document.getElementById("fullText_"+selectAtt.id).remove();
 }
 
 function drawBox(e){
@@ -214,9 +247,7 @@ function drawBox(e){
   selected.setAttribute("width", width);
   selected.setAttribute("height", height);
 
-  selectAtt = getAttributes(selected);
-  changeCircles()
-  changeText();
+  movedElement();
 }
 
 function drawCircles(){
@@ -280,18 +311,37 @@ function drawLine(e){
   line.setAttribute('y2',e.pageY)
 }
 
+function Link(startNode,line) {
+  this.startNode = startNode;
+  this.line = line;
+}
+
 function connectBox(e){
   connecting = false;
+  onmousemove = null
+
   let line = document.getElementById("line_"+selectAtt.id);
   line.remove();
 
   dest = e.currentTarget.firstChild;
+
+  links = mindGraph.get(selected);
+  if (links.get(dest)){
+    return 0;
+  }
+
+
   destAtt = getAttributes(dest);
   
   let newLine = "<line id='line_"+selectAtt.id+"_"+destAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+destAtt.xMid+"' y2='"+destAtt.yMid+"' style='stroke:red;stroke-width:2'>";
   area.insertAdjacentHTML('beforeend', newLine);
 
-  onmousemove = null
+  let lineCreated = document.getElementById("line_"+selectAtt.id+"_"+destAtt.id);
+  links = mindGraph.get(selected);
+  links.set(dest,new Link(true,lineCreated));
+  links = mindGraph.get(dest);
+  links.set(selected,new Link(false,lineCreated));
+
 }
 
 function removeLine(){
@@ -326,51 +376,42 @@ function expand(e){
 
 
 function expandLeft(e){
-  newX = e.clientX;
+  newX = e.pageX;
   newWidth = selectAtt.width + (selectAtt.x - newX);
   
   if (newWidth >10){
     selected.setAttribute('x',newX);
     selected.setAttribute('width',newWidth);
-    selectAtt = getAttributes(selected);
-    changeCircles();
-    changeText();
+    movedElement();
   }
 }
 
 function expandRight(e){
-  newWidth = e.clientX - selectAtt.x;
+  newWidth = e.pageX - selectAtt.x;
   
   if (newWidth >10){
     selected.setAttribute('width',newWidth);
-    selectAtt = getAttributes(selected);
-    changeCircles();
-    changeText();
+    movedElement();
   }
 }
 
 function expandUp(e){
-  newY = e.clientY;
+  newY = e.pageY;
   newHeight = selectAtt.height + (selectAtt.y - newY); 
 
   if (newHeight >10){
     selected.setAttribute('y',newY);
     selected.setAttribute('height',newHeight);
-    selectAtt = getAttributes(selected);
-    changeCircles();
-    changeText();
+    movedElement();
   }
 }
 
 function expandDown(e){
-  newHeight = e.clientY - selectAtt.y;
+  newHeight = e.pageY - selectAtt.y;
   
   if (newHeight >10){
     selected.setAttribute('height',newHeight);
-    selectAtt = getAttributes(selected);
-    changeCircles();
-    changeText();
-    
+    movedElement();
   }
 }
 
