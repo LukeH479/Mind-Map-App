@@ -12,6 +12,11 @@ let start;
 let connecting = false;
 let mindGraph = new Map([]);
 
+/*
+Function that deal with user mousedown interactions
+*/
+
+//The user clicks on the svg area but no element
 function newElement(e){
   if (connecting == true){
     removeLine();
@@ -38,6 +43,37 @@ function newElement(e){
   }
 }
 
+//The user clicks on a group
+function clickOnElement(e) {
+  if (growing == true){
+    return 0;
+  }
+  e.stopPropagation();
+  if (connecting == true){
+    if (e.currentTarget.firstChild != selected){
+      connectBox(e);
+    }
+    return 0;
+  }
+  if (selected == null){
+    select(e);
+  }else if (e.currentTarget.firstChild != selected){
+    unselect();
+    select(e);
+  }
+  startMovement(e);
+}
+
+function createNewElement(e){
+  return "<g id='g_"+count+"'>"+"<rect id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/>"
+  +"<text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text>"
+  +"<text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>"
+  +"</g>"
+  }
+
+/*
+These functions deal with the process of selecting, unselecting and deleting selected elements
+*/
 function select(e){
   selected = e.currentTarget.firstChild;
   selectAtt = getAttributes(selected);
@@ -73,17 +109,6 @@ function deleteSelect(e){
   }
 }
 
-function removeAllLinks(){
-  allConnections = mindGraph.get(selected);
-  for (const x of allConnections.keys()) {
-    curr = mindGraph.get(x);
-    y = curr.get(selected);
-    y.line.remove();
-    curr.delete(y);
-  }
-  allConnections.delete(selected);
-}
-
 function getAttributes(curr){
   let obj = {
     x : +curr.getAttribute('x'),
@@ -105,33 +130,9 @@ function getAttributes(curr){
   
 }
 
-function createNewElement(e){
-return "<g id='g_"+count+"'>"+"<rect id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/>"
-+"<text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text>"
-+"<text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>"
-+"</g>"
-}
-
-
-function clickOnElement(e) {
-    if (growing == true){
-      return 0;
-    }
-    e.stopPropagation();
-    if (connecting == true){
-      if (e.currentTarget.firstChild != selected){
-        connectBox(e);
-      }
-      return 0;
-    }
-    if (selected == null){
-      select(e);
-    }else if (e.currentTarget.firstChild != selected){
-      unselect();
-      select(e);
-    }
-    startMovement(e);
-}
+/**
+ * These functions are used for starting and stopping the movement of the text box
+ */
 
 function startMovement(e){
   posGrabbedX = e.pageX - selectAtt.x;   
@@ -161,23 +162,86 @@ function movedElement(){
 function dropElement() {
   area.onmouseup = null;
   area.onmousemove = null;
+}
+
+/*
+Functions for creating the element itself
+*/
+function drawBox(e){
+  let width, height;
+  let x , y;
+  if (start[0] < e.pageX){
+    width = e.pageX - start[0];
+    x = start[0]
+  }else{
+    width = start[0] - e.pageX;
+    x = e.pageX;
+  }
+
+  if (start[1] < e.pageY){
+    height = e.pageY - start[1]
+    y = start[1]
+  }else{
+    height = start[1] - e.pageY
+    y = e.pageY
+  }
+  selected.setAttribute("x", x);
+  selected.setAttribute("y", y);
+  selected.setAttribute("width", width);
+  selected.setAttribute("height", height);
+
+  movedElement();
+}
+
+/*
+* Functions used for creating, moving and deleting circles
+ */
+
+function drawCircles(){
+  x = selectAtt.x
+  y = selectAtt.y
+  yMid = selectAtt.yMid
+  yEnd = selectAtt.yEnd
+  xMid = selectAtt.xMid
+  xEnd = selectAtt.xEnd
+
+  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]];
+  for (let i = 0; i < 8; i++ ){
+    newCirc = '<circle id="'+selectAtt.id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
+    area.insertAdjacentHTML('beforeend', newCirc);
+    circs[i] = document.getElementById(selectAtt.id+"_"+i)
+    circs[i].addEventListener("mousedown",expand);
+  }
   
 }
 
-function changeLinks(){
-  allConnections = mindGraph.get(selected);
-  for (const x of allConnections.values()) {
-    if (x.startNode){
-      x.line.setAttribute('x1',selectAtt.xMid);
-      x.line.setAttribute('y1',selectAtt.yMid);
-    }else{
-      x.line.setAttribute('x2',selectAtt.xMid);
-      x.line.setAttribute('y2',selectAtt.yMid);
-    }
-  }
+function changeCircles(){
+  x = selectAtt.x
+  y = selectAtt.y
+  yMid = selectAtt.yMid
+  yEnd = selectAtt.yEnd
+  xMid = selectAtt.xMid
+  xEnd = selectAtt.xEnd
 
+  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]]
+  
+  for (let i = 0; i<8; i++){
+    circs[i].setAttribute("cx",pos[i][0])
+    circs[i].setAttribute("cy",pos[i][1])
+  }
+ 
 }
 
+function removeCircles(){
+  for (let i = 0; i < 8; i++){
+    circs[i].remove();
+    circs[i] = null;
+  }
+}
+
+/*
+* Functions for creating, moving and changing text
+*/
 function changeText(){
   fullText = document.getElementById("fullText_"+selectAtt.id)
   displayText = document.getElementById("text_"+selectAtt.id)
@@ -240,72 +304,32 @@ function removeText(){
   document.getElementById("fullText_"+selectAtt.id).remove();
 }
 
-function drawBox(e){
-  let width, height;
-  let x , y;
-  if (start[0] < e.pageX){
-    width = e.pageX - start[0];
-    x = start[0]
-  }else{
-    width = start[0] - e.pageX;
-    x = e.pageX;
+/*
+* Functions for creating, moving and removing links
+*/
+function removeAllLinks(){
+  allConnections = mindGraph.get(selected);
+  for (const x of allConnections.keys()) {
+    curr = mindGraph.get(x);
+    y = curr.get(selected);
+    y.line.remove();
+    curr.delete(y);
   }
-
-  if (start[1] < e.pageY){
-    height = e.pageY - start[1]
-    y = start[1]
-  }else{
-    height = start[1] - e.pageY
-    y = e.pageY
-  }
-  selected.setAttribute("x", x);
-  selected.setAttribute("y", y);
-  selected.setAttribute("width", width);
-  selected.setAttribute("height", height);
-
-  movedElement();
+  allConnections.delete(selected);
 }
 
-function drawCircles(){
-  x = selectAtt.x
-  y = selectAtt.y
-  yMid = selectAtt.yMid
-  yEnd = selectAtt.yEnd
-  xMid = selectAtt.xMid
-  xEnd = selectAtt.xEnd
-
-  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]];
-  for (let i = 0; i < 8; i++ ){
-    newCirc = '<circle id="'+selectAtt.id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
-    area.insertAdjacentHTML('beforeend', newCirc);
-    circs[i] = document.getElementById(selectAtt.id+"_"+i)
-    circs[i].addEventListener("mousedown",expand);
+function changeLinks(){
+  allConnections = mindGraph.get(selected);
+  for (const x of allConnections.values()) {
+    if (x.startNode){
+      x.line.setAttribute('x1',selectAtt.xMid);
+      x.line.setAttribute('y1',selectAtt.yMid);
+    }else{
+      x.line.setAttribute('x2',selectAtt.xMid);
+      x.line.setAttribute('y2',selectAtt.yMid);
+    }
   }
-  
-}
 
-function changeCircles(){
-  x = selectAtt.x
-  y = selectAtt.y
-  yMid = selectAtt.yMid
-  yEnd = selectAtt.yEnd
-  xMid = selectAtt.xMid
-  xEnd = selectAtt.xEnd
-
-  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]]
-  
-  for (let i = 0; i<8; i++){
-    circs[i].setAttribute("cx",pos[i][0])
-    circs[i].setAttribute("cy",pos[i][1])
-  }
- 
-}
-
-function removeCircles(){
-  for (let i = 0; i < 8; i++){
-    circs[i].remove();
-    circs[i] = null;
-  }
 }
 
 function drawLinkBoxes(){
@@ -390,6 +414,10 @@ function removeLine(){
   line.remove();
   onmousemove = null
 }
+
+/*
+Functions for changing the size of the given element
+*/
 
 function expand(e){
   e.stopPropagation();
