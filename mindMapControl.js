@@ -41,12 +41,16 @@ function newElement(e){
 function select(e){
   selected = e.currentTarget.firstChild;
   selectAtt = getAttributes(selected);
-  drawCircles(e.target.firstChild);
+  drawCircles(selected);
+  drawLinkBoxes(selected);
 }
 
 function unselect(){
-  selectAtt = null;
   removeCircles();
+  if (growing == false){
+    removeLinkBoxes();
+  }
+  selectAtt = null;
   selected = null;
 }
 
@@ -55,9 +59,17 @@ function deleteSelect(e){
     removeCircles();
     removeText();
     removeAllLinks();
+    if (growing == false){
+      removeLinkBoxes();
+    }
     selected.parentNode.remove();
+    area.onmousemove = null;
+    growing = false;
+    
+
     selected.remove();
     selected = null;
+    selectAtt = null;
   }
 }
 
@@ -94,7 +106,7 @@ function getAttributes(curr){
 }
 
 function createNewElement(e){
-return "<g id='g_"+count+"'>"+"<rect draggable='true' id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/>"
+return "<g id='g_"+count+"'>"+"<rect id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/>"
 +"<text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text>"
 +"<text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>"
 +"</g>"
@@ -105,15 +117,16 @@ function clickOnElement(e) {
     if (growing == true){
       return 0;
     }
+    e.stopPropagation();
     if (connecting == true){
-      connectBox(e);
-      e.stopPropagation();
+      if (e.currentTarget.firstChild != selected){
+        connectBox(e);
+      }
       return 0;
     }
-    e.stopPropagation();
     if (selected == null){
       select(e);
-    }else if (e.target.firstChild != selected){
+    }else if (e.currentTarget.firstChild != selected){
       unselect();
       select(e);
     }
@@ -125,7 +138,7 @@ function startMovement(e){
   posGrabbedY = e.pageY - selectAtt.y;   
   
   area.onmousemove = dragElement;
-  area.onmouseup = dropElement;
+  area.onmouseup = (e => {dragElement(e); dropElement(e)});
 }
 
 function dragElement(e) {
@@ -139,6 +152,9 @@ function movedElement(){
   selectAtt = getAttributes(selected);
   changeText();
   changeCircles();
+  if (growing == false){
+    changeLinkBoxes();
+  }
   changeLinks();
 }
 
@@ -266,10 +282,6 @@ function drawCircles(){
     circs[i].addEventListener("mousedown",expand);
   }
   
-  linkCirc = '<circle id="'+selectAtt.id+'_link" r="10" cx="'+xMid+'" cy="'+yMid+'" fill="red" stroke="red"/>'
-  area.insertAdjacentHTML('beforeend', linkCirc);
-  circs[8] = document.getElementById(selectAtt.id+"_link")
-  circs[8].addEventListener("mousedown",linkBox);
 }
 
 function changeCircles(){
@@ -280,9 +292,9 @@ function changeCircles(){
   xMid = selectAtt.xMid
   xEnd = selectAtt.xEnd
 
-  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd],[xMid,yMid]]
+  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]]
   
-  for (let i = 0; i<9; i++){
+  for (let i = 0; i<8; i++){
     circs[i].setAttribute("cx",pos[i][0])
     circs[i].setAttribute("cy",pos[i][1])
   }
@@ -290,10 +302,38 @@ function changeCircles(){
 }
 
 function removeCircles(){
-  for (let i = 0; i < 9; i++){
+  for (let i = 0; i < 8; i++){
     circs[i].remove();
     circs[i] = null;
   }
+}
+
+function drawLinkBoxes(){
+  topBox = `<rect id="${selectAtt.id}_linkParent" width=${selectAtt.width / 2} height="10" x="${selectAtt.x + (selectAtt.width/4)}" y="${selectAtt.y - 15}"fill='red' stroke='black'/>`
+  botBox = `<rect id="${selectAtt.id}_linkChild" width=${selectAtt.width / 2} height="10" x="${selectAtt.x + (selectAtt.width/4)}" y="${selectAtt.y +selectAtt.height + 10}"fill='blue' stroke='black'/>`
+  
+  area.insertAdjacentHTML('beforeend', topBox);
+  area.insertAdjacentHTML('beforeend', botBox);
+
+  document.getElementById(`${selectAtt.id}_linkParent`).addEventListener("mousedown",linkBox);
+  document.getElementById(`${selectAtt.id}_linkChild`).addEventListener("mousedown",linkBox);
+}
+
+function changeLinkBoxes(){
+  topBox = document.getElementById(`${selectAtt.id}_linkParent`);
+  topBox.setAttribute('x',selectAtt.x + (selectAtt.width/4));
+  topBox.setAttribute('y',selectAtt.y - 15);
+  topBox.setAttribute('width',selectAtt.width / 2);
+
+  botBox = document.getElementById(`${selectAtt.id}_linkChild`);
+  botBox.setAttribute('x',selectAtt.x + (selectAtt.width/4));
+  botBox.setAttribute('y',selectAtt.y +selectAtt.height + 10);
+  botBox.setAttribute('width',selectAtt.width / 2);
+}
+
+function removeLinkBoxes(){
+  document.getElementById(`${selectAtt.id}_linkParent`).remove();
+  document.getElementById(`${selectAtt.id}_linkChild`).remove();
 }
 
 function linkBox(e){
