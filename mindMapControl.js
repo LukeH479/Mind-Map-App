@@ -1,63 +1,97 @@
 area = document.getElementById("mySvg");
-area.addEventListener("mousedown", newElement);
+area.addEventListener("mousedown", clickOnSVG);
 document.addEventListener("keydown", deleteSelect);
 
-let growing = false;
-let count = 0;
-let selected = null;
-let selectAtt = {};
-let posGrabbedX, posGrabbedY
-const circs = [] 
-let start;
-let connecting = false;
-let mindGraph = new Map([]);
+function Group(id,group,shape,fullText,displayText){
+  this.id = id
+  this.group = group
+  this.shape = shape;
+  this.outlineRect = null;
+  this.fullText = fullText;
+  this.displayText = displayText;
+  this.links = new Map();
 
+  this.circs = [];
+  this.potentialLink = null;
+  this.topNode = null;
+  this.botNode = null;
+
+}
+
+function Rectangle(rect){
+  this.rect = rect;
+  this.x = +rect.getAttribute('x');
+  this.y = +rect.getAttribute('y');
+  this.id = rect.getAttribute('id');
+  this.width = +rect.getAttribute('width');
+  this.height = +rect.getAttribute('height');
+  this.yMid = this.y+(this.height/2);
+  this.yEnd = this.y+this.height;
+  this.xMid = this.x+(this.width/2);
+  this.xEnd = this.x+this.width;
+}
+
+function Link(startNode,line,rank) {
+  this.startNode = startNode;
+  this.line = line;
+}
+
+function PotentialLink(parent,line){
+  this.connectingToParent = parent;
+  this.line = line;
+}
+
+let creatingNewShape = false;
+let drawingLink = false;
+let elementsCreated = 0;
+
+let selected = null;
+
+let posGrabbedX, posGrabbedY
+let groupObjects = new Map();
 /*
 Function that deal with user mousedown interactions
 */
 
 //The user clicks on the svg area but no element
-function newElement(e){
-  if (connecting == true){
-    removeLine();
-    return 0;
-  }
-  if (selected != null && growing == false){
-    unselect();
-  }else if (!growing){
-    let newElement = createNewElement(e);
-    start = [e.pageX, e.pageY];
-    area.insertAdjacentHTML('beforeend', newElement);
-    selected = document.getElementById("rect"+count)
-    selectAtt = getAttributes(selected);
-    mindGraph.set(selected,new Map([]));
-    drawCircles();
-    area.onmousemove = drawBox;
-    count++
-    growing = true;
-  }else{
-    document.getElementById("g_"+(count-1)).addEventListener("mousedown", clickOnElement, false);
+function clickOnSVG(e){
+  if (drawingLink){
+    endDrawingLink(); 
+  
+  }else if (creatingNewShape){
+    selected.group.addEventListener("mousedown", clickOnElement, false);
     unselect();
     area.onmousemove = null;
-    growing = false;
+    creatingNewShape = false;
+  
+  }else if (selected != null){
+    unselect();
+
+  }else{
+    selected = createNewElement(e);
+    groupObjects.set(selected.group,selected)
+    drawCircles();
+    area.onmousemove = (event => drawBox(event,e.pageX,e.pageY));
+    elementsCreated++
+    creatingNewShape = true;
   }
 }
 
-//The user clicks on a group
+//The user clicks on a shape
 function clickOnElement(e) {
-  if (growing == true){
+  if (creatingNewShape == true){
     return 0;
   }
   e.stopPropagation();
-  if (connecting == true){
-    if (e.currentTarget.firstChild != selected){
+  if (drawingLink == true){
+    if (e.currentTarget != selected.group){
       connectBox(e);
     }
     return 0;
   }
   if (selected == null){
     select(e);
-  }else if (e.currentTarget.firstChild != selected){
+  }else if (e.currentTarget != selected.group){
     unselect();
     select(e);
   }
@@ -65,69 +99,65 @@ function clickOnElement(e) {
 }
 
 function createNewElement(e){
-  return "<g id='g_"+count+"'>"+"<rect id='rect"+count+"' width = '0' height = '0' x='"+e.pageX+"' y='"+e.pageY+"' fill='white' stroke='black'/>"
-  +"<text class ='fullText' id='fullText_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Commodi distinctio error provident quo unde, ipsam id cumque reiciendis aut porro incidunt quis ipsum perspiciatis illum dolores obcaecati blanditiis. Culpa, delectus?</text>"
-  +"<text id='text_rect"+count+"' x='"+e.pageX+"' y = '"+e.pageY+"'></text>"
-  +"</g>"
-  }
+  newGroup = document.createElementNS("http://www.w3.org/2000/svg","g");
+  newGroup.setAttribute('id',`g${elementsCreated}`)
+  area.appendChild(newGroup);
+  newRect = document.createElementNS("http://www.w3.org/2000/svg","rect")
+  newRect.setAttribute('id',`rect${elementsCreated}`)
+  newRect.setAttribute('x',e.pageX)
+  newRect.setAttribute('y',e.pageY)
+  newRect.setAttribute('height',"0")
+  newRect.setAttribute('width',"0")
+  newRect.setAttribute('fill',"white")
+  newRect.setAttribute('stroke',"black")
+  newGroup.appendChild(newRect);
+  fullText = document.createElementNS("http://www.w3.org/2000/svg","text")
+  fullText.setAttribute("class","fullText");
+  fullText.setAttribute('id',`fullText_rect${elementsCreated}`)
+  fullText.innerHTML = "Lorem ipsum dolor sit amet consectetur adipisicing elit. Saepe obcaecati, omnis est recusandae hic possimus consequatur labore in. Esse dicta sunt, molestiae cum velit expedita ipsa cupiditate modi ea iste!";
+  newGroup.appendChild(fullText);
+  displayText = document.createElementNS("http://www.w3.org/2000/svg","text")
+  displayText.setAttribute('id',`text_rect${elementsCreated}`)
+  newGroup.appendChild(displayText);
 
+  return new Group(`rect${elementsCreated}`,newGroup, new Rectangle(newRect),fullText,displayText);
+}
 /*
 These functions deal with the process of selecting, unselecting and deleting selected elements
 */
 function select(e){
-  selected = e.currentTarget.firstChild;
-  selectAtt = getAttributes(selected);
+  selected = groupObjects.get(e.currentTarget);
   drawCircles(selected);
-  drawLinkBoxes(selected);
+  drawLinkNodes(selected);
 }
 
 function unselect(){
   removeCircles();
-  if (growing == false){
-    removeLinkBoxes();
+  if (creatingNewShape == false){
+    removeLinkNodes();
   }
-  selectAtt = null;
   selected = null;
 }
 
 function deleteSelect(e){
+  if (drawingLink == true){
+    endDrawingLink();
+    return 0;
+  }
   if (e.keyCode == 8 && selected != null){
     removeCircles();
     removeText();
     removeAllLinks();
-    if (growing == false){
-      removeLinkBoxes();
+    if (creatingNewShape == false){
+      removeLinkNodes();
     }
-    selected.parentNode.remove();
+    selected.group.remove();
     area.onmousemove = null;
-    growing = false;
+    area.onmouseup = null;
+    creatingNewShape = false;
     
-
-    selected.remove();
     selected = null;
-    selectAtt = null;
   }
-}
-
-function getAttributes(curr){
-  let obj = {
-    x : +curr.getAttribute('x'),
-    y : +curr.getAttribute('y'),
-    id : curr.getAttribute('id'),
-    width : +curr.getAttribute('width'),
-    height : +curr.getAttribute('height'),
-    yEnd : this.y+this.height,
-    xMid : this.x+(this.width/2),
-    xEnd : this.x+this.width,
-  }
-
-  obj.yMid = obj.y+(obj.height/2);
-  obj.yEnd = obj.y+obj.height;
-  obj.xMid = obj.x+(obj.width/2);
-  obj.xEnd = obj.x+obj.width;
-  
-  return obj;
-  
 }
 
 /**
@@ -135,8 +165,8 @@ function getAttributes(curr){
  */
 
 function startMovement(e){
-  posGrabbedX = e.pageX - selectAtt.x;   
-  posGrabbedY = e.pageY - selectAtt.y;   
+  posGrabbedX = e.pageX - selected.shape.x;   
+  posGrabbedY = e.pageY - selected.shape.y;   
   
   area.onmousemove = dragElement;
   area.onmouseup = (e => {dragElement(e); dropElement(e)});
@@ -144,17 +174,17 @@ function startMovement(e){
 
 function dragElement(e) {
   e.preventDefault();
-  selected.setAttribute("x", e.pageX - posGrabbedX);
-  selected.setAttribute("y", e.pageY - posGrabbedY);
+  selected.shape.rect.setAttribute("x", e.pageX - posGrabbedX);
+  selected.shape.rect.setAttribute("y", e.pageY - posGrabbedY);
   movedElement();
 }
 
 function movedElement(){
-  selectAtt = getAttributes(selected);
+  selected.shape = new Rectangle(selected.shape.rect)
   changeText();
   changeCircles();
-  if (growing == false){
-    changeLinkBoxes();
+  if (creatingNewShape == false){
+    changeLinkNodes();
   }
   changeLinks();
 }
@@ -167,28 +197,28 @@ function dropElement() {
 /*
 Functions for creating the element itself
 */
-function drawBox(e){
+function drawBox(e,origX,origY){
   let width, height;
   let x , y;
-  if (start[0] < e.pageX){
-    width = e.pageX - start[0];
-    x = start[0]
+  if (origX < e.pageX){
+    width = e.pageX - origX;
+    x = origX
   }else{
-    width = start[0] - e.pageX;
+    width = origX - e.pageX;
     x = e.pageX;
   }
 
-  if (start[1] < e.pageY){
-    height = e.pageY - start[1]
-    y = start[1]
+  if (origY < e.pageY){
+    height = e.pageY - origY
+    y = origY
   }else{
-    height = start[1] - e.pageY
+    height = origY - e.pageY
     y = e.pageY
   }
-  selected.setAttribute("x", x);
-  selected.setAttribute("y", y);
-  selected.setAttribute("width", width);
-  selected.setAttribute("height", height);
+  selected.shape.rect.setAttribute("x", x);
+  selected.shape.rect.setAttribute("y", y);
+  selected.shape.rect.setAttribute("width", width);
+  selected.shape.rect.setAttribute("height", height);
 
   movedElement();
 }
@@ -198,44 +228,30 @@ function drawBox(e){
  */
 
 function drawCircles(){
-  x = selectAtt.x
-  y = selectAtt.y
-  yMid = selectAtt.yMid
-  yEnd = selectAtt.yEnd
-  xMid = selectAtt.xMid
-  xEnd = selectAtt.xEnd
-
-  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]];
+  s = selected.shape
+  let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]];
   for (let i = 0; i < 8; i++ ){
-    newCirc = '<circle id="'+selectAtt.id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
-    area.insertAdjacentHTML('beforeend', newCirc);
-    circs[i] = document.getElementById(selectAtt.id+"_"+i)
-    circs[i].addEventListener("mousedown",expand);
+    newCirc = '<circle id="'+selected.id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
+    selected.group.insertAdjacentHTML('beforeend', newCirc);
+    selected.circs[i] = document.getElementById(selected.id+"_"+i)
+    selected.circs[i].addEventListener("mousedown",expand);
   }
   
 }
 
 function changeCircles(){
-  x = selectAtt.x
-  y = selectAtt.y
-  yMid = selectAtt.yMid
-  yEnd = selectAtt.yEnd
-  xMid = selectAtt.xMid
-  xEnd = selectAtt.xEnd
-
-  let pos = [[x,y],[x,yMid],[x,yEnd],[xMid,y],[xMid,yEnd],[xEnd,y],[xEnd,yMid],[xEnd,yEnd]]
-  
+  s = selected.shape
+  let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]]
   for (let i = 0; i<8; i++){
-    circs[i].setAttribute("cx",pos[i][0])
-    circs[i].setAttribute("cy",pos[i][1])
+    selected.circs[i].setAttribute("cx",pos[i][0])
+    selected.circs[i].setAttribute("cy",pos[i][1])
   }
- 
 }
 
 function removeCircles(){
   for (let i = 0; i < 8; i++){
-    circs[i].remove();
-    circs[i] = null;
+    selected.circs[i].remove();
+    selected.circs[i] = null;
   }
 }
 
@@ -243,17 +259,17 @@ function removeCircles(){
 * Functions for creating, moving and changing text
 */
 function changeText(){
-  fullText = document.getElementById("fullText_"+selectAtt.id)
-  displayText = document.getElementById("text_"+selectAtt.id)
-  displayText.setAttribute('x',selectAtt.x)
-  displayText.setAttribute('y',selectAtt.y)
+  fullText = document.getElementById("fullText_"+selected.id)
+  displayText = document.getElementById("text_"+selected.id)
+  displayText.setAttribute('x',selected.shape.x)
+  displayText.setAttribute('y',selected.shape.y)
   fitToBox(displayText,fullText);
 }
 
 function fitToBox(displayText,fullText){
-  let numLines = selectAtt.height / 12
+  let numLines = selected.shape.height / 12
   const lines = []
-  let lineLength = selectAtt.width / 8
+  let lineLength = selected.shape.width / 8
   let words = fullText.innerHTML.split(" ");
 
   displayText.innerHTML = "";
@@ -288,131 +304,142 @@ function fitToBox(displayText,fullText){
   let newText;
   for (let i = 0; i <= currLine; i++){
     if (i >= numLines - 1){
-      newText = "<tspan dy = '10' dx = '0' x='"+x+"'>...</tspan>";
+      newText = "<tspan dy = '10' dx = '0' x='"+selected.shape.x+"'>...</tspan>";
       displayText.insertAdjacentHTML('beforeend', newText);
 
       break;
     }
-    newText = "<tspan dy = '10' dx = '0' x='"+x+"'>"+lines[i]+"</tspan>";
+    newText = "<tspan dy = '10' dx = '0' x='"+selected.shape.x+"'>"+lines[i]+"</tspan>";
     displayText.insertAdjacentHTML('beforeend', newText);
   }
 
 }
 
 function removeText(){
-  document.getElementById("text_"+selectAtt.id).remove();
-  document.getElementById("fullText_"+selectAtt.id).remove();
+  document.getElementById("text_"+selected.id).remove();
+  document.getElementById("fullText_"+selected.id).remove();
 }
 
 /*
 * Functions for creating, moving and removing links
 */
-function removeAllLinks(){
-  allConnections = mindGraph.get(selected);
-  for (const x of allConnections.keys()) {
-    curr = mindGraph.get(x);
-    y = curr.get(selected);
-    y.line.remove();
-    curr.delete(y);
-  }
-  allConnections.delete(selected);
-}
 
-function changeLinks(){
-  allConnections = mindGraph.get(selected);
-  for (const x of allConnections.values()) {
-    if (x.startNode){
-      x.line.setAttribute('x1',selectAtt.xMid);
-      x.line.setAttribute('y1',selectAtt.yMid);
-    }else{
-      x.line.setAttribute('x2',selectAtt.xMid);
-      x.line.setAttribute('y2',selectAtt.yMid);
-    }
-  }
-
-}
-
-function drawLinkBoxes(){
-  topBox = `<rect id="${selectAtt.id}_linkParent" width=${selectAtt.width / 2} height="10" x="${selectAtt.x + (selectAtt.width/4)}" y="${selectAtt.y - 15}"fill='red' stroke='black'/>`
-  botBox = `<rect id="${selectAtt.id}_linkChild" width=${selectAtt.width / 2} height="10" x="${selectAtt.x + (selectAtt.width/4)}" y="${selectAtt.y +selectAtt.height + 10}"fill='blue' stroke='black'/>`
+function drawLinkNodes(){
+  topBox = `<rect id="${selected.id}_linkParent" width=${selected.shape.width / 2} height="10" x="${selected.shape.x + (selected.shape.width/4)}" y="${selected.shape.y - 15}"fill='red' stroke='black'/>`
+  botBox = `<rect id="${selected.id}_linkChild" width=${selected.shape.width / 2} height="10" x="${selected.shape.x + (selected.shape.width/4)}" y="${selected.shape.y +selected.shape.height + 10}"fill='blue' stroke='black'/>`
   
   area.insertAdjacentHTML('beforeend', topBox);
   area.insertAdjacentHTML('beforeend', botBox);
 
-  document.getElementById(`${selectAtt.id}_linkParent`).addEventListener("mousedown",linkBox);
-  document.getElementById(`${selectAtt.id}_linkChild`).addEventListener("mousedown",linkBox);
+  t = document.getElementById(`${selected.id}_linkParent`)
+  t.addEventListener("mousedown",parentConnection);
+  selected.topNode = t
+  b = document.getElementById(`${selected.id}_linkChild`)
+  b.addEventListener("mousedown",childConnection);
+  selected.botNode = b
 }
 
-function changeLinkBoxes(){
-  topBox = document.getElementById(`${selectAtt.id}_linkParent`);
-  topBox.setAttribute('x',selectAtt.x + (selectAtt.width/4));
-  topBox.setAttribute('y',selectAtt.y - 15);
-  topBox.setAttribute('width',selectAtt.width / 2);
+function changeLinkNodes(){
+  selected.topNode.setAttribute('x',selected.shape.x + (selected.shape.width/4));
+  selected.topNode.setAttribute('y',selected.shape.y - 15);
+  selected.topNode.setAttribute('width',selected.shape.width / 2);
 
-  botBox = document.getElementById(`${selectAtt.id}_linkChild`);
-  botBox.setAttribute('x',selectAtt.x + (selectAtt.width/4));
-  botBox.setAttribute('y',selectAtt.y +selectAtt.height + 10);
-  botBox.setAttribute('width',selectAtt.width / 2);
+  selected.botNode.setAttribute('x',selected.shape.x + (selected.shape.width/4));
+  selected.botNode.setAttribute('y',selected.shape.y +selected.shape.height + 10);
+  selected.botNode.setAttribute('width',selected.shape.width / 2);
 }
 
-function removeLinkBoxes(){
-  document.getElementById(`${selectAtt.id}_linkParent`).remove();
-  document.getElementById(`${selectAtt.id}_linkChild`).remove();
+function removeLinkNodes(){
+  selected.topNode.remove();
+  selected.topNode = null;
+  selected.botNode.remove();
+  selected.topNode = null;
 }
 
-function linkBox(e){
-  connecting = true;
+function createNewLine(id,x1,y1,x2,y2,colour,width){
+  newLine = document.createElementNS("http://www.w3.org/2000/svg","line")
+  newLine.setAttribute('id',id)
+  newLine.setAttribute('x1',x1)
+  newLine.setAttribute('y1',y1)
+  newLine.setAttribute('x2',x2);
+  newLine.setAttribute('y2',y2);
+  newLine.setAttribute('stroke',colour)
+  newLine.setAttribute('stroke-width',width)
+  return newLine;
+}
+
+function parentConnection(e){
+  drawingLink = true;
   e.stopPropagation();
-  let newLine = "<line id='line_"+selectAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+e.pageX+"' y2='"+e.pageY+"'>";
-  area.insertAdjacentHTML('beforeend', newLine);
+  newLine = createNewLine(`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,e.pageX,e.pageY,'red',5);
+  area.appendChild(newLine);
+  selected.potentialLink = new PotentialLink(true,newLine);
 
-  onmousemove = drawLine;
+  onmousemove = followMouseWithLine;
 }
 
-function drawLine(e){
-  line = document.getElementById("line_"+selectAtt.id)
-  line.setAttribute('x2',e.pageX)
-  line.setAttribute('y2',e.pageY)
+function childConnection(e){
+  drawingLink = true;
+  e.stopPropagation();
+  newLine = createNewLine(`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,e.pageX,e.pageY,'blue',5);
+  area.appendChild(newLine);
+  selected.potentialLink = new PotentialLink(false,newLine);
+
+  onmousemove = followMouseWithLine;
 }
 
-function Link(startNode,line) {
-  this.startNode = startNode;
-  this.line = line;
+function followMouseWithLine(e){
+  selected.potentialLink.line.setAttribute('x2',e.pageX)
+  selected.potentialLink.line.setAttribute('y2',e.pageY)
 }
 
 function connectBox(e){
-  connecting = false;
+  drawingLink = false;
   onmousemove = null
 
-  let line = document.getElementById("line_"+selectAtt.id);
-  line.remove();
+  selected.potentialLink.line.remove();
 
-  dest = e.currentTarget.firstChild;
+  dest = groupObjects.get(e.currentTarget);
 
-  links = mindGraph.get(selected);
-  if (links.get(dest)){
-    return 0;
+  if (selected.links.get(dest)){
+    return;
   }
-
-
-  destAtt = getAttributes(dest);
+  colour = 'red'
+  width = 5
   
-  let newLine = "<line id='line_"+selectAtt.id+"_"+destAtt.id+"' x1='"+selectAtt.xMid+"' y1='"+selectAtt.yMid+"' x2='"+destAtt.xMid+"' y2='"+destAtt.yMid+"'>";
-  area.insertAdjacentHTML('afterbegin', newLine);
+  newLine = createNewLine(`line_${selected.id}_${dest.id}`,selected.shape.xMid,selected.shape.yMid,dest.shape.xMid,dest.shape.yMid,colour,width);
+  area.prepend(newLine);
 
-  let lineCreated = document.getElementById("line_"+selectAtt.id+"_"+destAtt.id);
-  links = mindGraph.get(selected);
-  links.set(dest,new Link(true,lineCreated));
-  links = mindGraph.get(dest);
-  links.set(selected,new Link(false,lineCreated));
+  selected.links.set(dest,new Link(true,newLine));
+  dest.links.set(selected,new Link(false,newLine));
 
 }
 
-function removeLine(){
-  connecting = false;
-  let line = document.getElementById("line_"+selectAtt.id);
-  line.remove();
+function endDrawingLink(){
+  drawingLink = false;
+  selected.potentialLink.line.remove();
   onmousemove = null
+}
+
+function changeLinks(){
+  for (const x of selected.links.values()) {
+    if (x.startNode){
+      x.line.setAttribute('x1',selected.shape.xMid);
+      x.line.setAttribute('y1',selected.shape.yMid);
+    }else{
+      x.line.setAttribute('x2',selected.shape.xMid);
+      x.line.setAttribute('y2',selected.shape.yMid);
+    }
+  }
+}
+
+function removeAllLinks(){
+  for (const x of selected.links.keys()) {
+    y = x.links.get(selected);
+    y.line.remove();
+    x.links.delete(y);
+  }
+  
 }
 
 /*
@@ -422,22 +449,30 @@ Functions for changing the size of the given element
 function expand(e){
   e.stopPropagation();
   area.onmouseup = dropElement;
-  if (e.target == circs[0]){
-    area.onmousemove = e => {expandUp(e) ;expandLeft(e)};
-  }else if (e.target == circs[1]){
-    area.onmousemove = expandLeft;
-  }else if (e.target == circs[2]){
-    area.onmousemove = e => {expandDown(e) ;expandLeft(e)};
-  }else if (e.target == circs[3]){
-    area.onmousemove = expandUp;
-  }else if (e.target == circs[4]){
-    area.onmousemove = expandDown;
-  }else if (e.target == circs[5]){
-    area.onmousemove = e => {expandUp(e) ;expandRight(e)};
-  }else if (e.target == circs[6]){
-    area.onmousemove = expandRight;
-  }else if (e.target == circs[7]){
-    area.onmousemove = e => {expandDown(e) ;expandRight(e)};
+  switch(e.target){
+    case selected.circs[0]:
+      area.onmousemove = e => {expandUp(e) ;expandLeft(e)};
+      break;
+    case selected.circs[1]:
+      area.onmousemove = expandLeft;
+      break;
+    case selected.circs[2]:
+      area.onmousemove = e => {expandDown(e) ;expandLeft(e)};
+      break;
+    case selected.circs[3]:
+      area.onmousemove = expandUp;
+      break;
+    case selected.circs[4]:
+      area.onmousemove = expandDown;
+      break;
+    case selected.circs[5]:
+      area.onmousemove = e => {expandUp(e) ;expandRight(e)};
+      break;
+    case selected.circs[6]:
+      area.onmousemove = expandRight;
+      break;
+    case selected.circs[7]:
+      area.onmousemove = e => {expandDown(e) ;expandRight(e)};
   }
 }
 
@@ -445,40 +480,40 @@ function expand(e){
 
 function expandLeft(e){
   newX = e.pageX;
-  newWidth = selectAtt.width + (selectAtt.x - newX);
+  newWidth = selected.shape.width + (selected.shape.x - newX);
   
   if (newWidth >10){
-    selected.setAttribute('x',newX);
-    selected.setAttribute('width',newWidth);
+    selected.shape.rect.setAttribute('x',newX);
+    selected.shape.rect.setAttribute('width',newWidth);
     movedElement();
   }
 }
 
 function expandRight(e){
-  newWidth = e.pageX - selectAtt.x;
+  newWidth = e.pageX - selected.shape.x;
   
   if (newWidth >10){
-    selected.setAttribute('width',newWidth);
+    selected.shape.rect.setAttribute('width',newWidth);
     movedElement();
   }
 }
 
 function expandUp(e){
   newY = e.pageY;
-  newHeight = selectAtt.height + (selectAtt.y - newY); 
+  newHeight = selected.shape.height + (selected.shape.y - newY); 
 
   if (newHeight >10){
-    selected.setAttribute('y',newY);
-    selected.setAttribute('height',newHeight);
+    selected.shape.rect.setAttribute('y',newY);
+    selected.shape.rect.setAttribute('height',newHeight);
     movedElement();
   }
 }
 
 function expandDown(e){
-  newHeight = e.pageY - selectAtt.y;
+  newHeight = e.pageY - selected.shape.y;
   
   if (newHeight >10){
-    selected.setAttribute('height',newHeight);
+    selected.shape.rect.setAttribute('height',newHeight);
     movedElement();
   }
 }
