@@ -1,3 +1,14 @@
+const colourArray = ['#FF6633', '#FFB399', '#FF33FF', '#FFFF99', '#00B3E6', 
+  '#E6B333', '#3366E6', '#999966', '#99FF99', '#B34D4D',
+  '#80B300', '#809900', '#E6B3B3', '#6680B3', '#66991A', 
+  '#FF99E6', '#CCFF1A', '#FF1A66', '#E6331A', '#33FFCC',
+  '#66994D', '#B366CC', '#4D8000', '#B33300', '#CC80CC', 
+  '#66664D', '#991AFF', '#E666FF', '#4DB3FF', '#1AB399',
+  '#E666B3', '#33991A', '#CC9999', '#B3B31A', '#00E680', 
+  '#4D8066', '#809980', '#E6FF80', '#1AFF33', '#999933',
+  '#FF3380', '#CCCC00', '#66E64D', '#4D80CC', '#9900B3', 
+  '#E64D66', '#4DB380', '#FF4D4D', '#99E6E6', '#6666FF'];
+
 area = document.getElementById("mySvg");
 area.addEventListener("mousedown", clickOnSVG);
 document.addEventListener("keydown", deleteSelect);
@@ -9,7 +20,10 @@ function Group(id,group,shape,fullText,displayText){
   this.outlineRect = null;
   this.fullText = fullText;
   this.displayText = displayText;
-  this.links = new Map();
+
+  this.parent = null;
+  this.tier = 0;
+  this.children = new Map();
 
   this.circs = [];
   this.potentialLink = null;
@@ -31,8 +45,7 @@ function Rectangle(rect){
   this.xEnd = this.x+this.width;
 }
 
-function Link(startNode,line,rank) {
-  this.startNode = startNode;
+function Link(line) {
   this.line = line;
 }
 
@@ -389,8 +402,8 @@ function childConnection(e){
 }
 
 function followMouseWithLine(e){
-  selected.potentialLink.line.setAttribute('x2',e.pageX)
-  selected.potentialLink.line.setAttribute('y2',e.pageY)
+  selected.potentialLink.line.setAttribute('x2',e.pageX-10)
+  selected.potentialLink.line.setAttribute('y2',e.pageY+10)
 }
 
 function connectBox(e){
@@ -398,21 +411,64 @@ function connectBox(e){
   onmousemove = null
 
   selected.potentialLink.line.remove();
-
   dest = groupObjects.get(e.currentTarget);
 
-  if (selected.links.get(dest)){
-    return;
-  }
-  colour = 'red'
-  width = 5
-  
-  newLine = createNewLine(`line_${selected.id}_${dest.id}`,selected.shape.xMid,selected.shape.yMid,dest.shape.xMid,dest.shape.yMid,colour,width);
+  if (selected.potentialLink.connectingToParent){
+    if (dest.parent && dest.parent[0] == selected){
+      dest.parent[1].line.remove();
+      selected.children.delete(dest);
+      dest.tier = 0
+      dest.parent = null;
+      updateChildLinks(dest)
+    }
+    if (selected.parent){
+      if (selected.parent[0]==dest){
+        return;
+      }
+      selected.parent[1].line.remove();
+      dest.children.delete(selected);
+    }
+    selected.tier = dest.tier + 1
+    newLine = createNewLine(`line_${selected.id}_${dest.id}`,dest.shape.xMid,dest.shape.yMid,selected.shape.xMid,selected.shape.yMid,colourArray[dest.tier],12 * (1/(dest.tier+1)));
+    selected.parent = [dest,new Link(newLine)]
+    dest.children.set(selected,new Link(newLine));
+    updateChildLinks(selected);
+  }else{
+    if (selected.parent && selected.parent[0] == dest){
+      selected.parent[1].line.remove();
+      dest.children.delete(selected);
+      selected.tier = 0
+      selected.parent = null;
+      updateChildLinks(selected)
+    }
+    if (dest.parent){
+      if (dest.parent[0]==selected){
+        return;
+      }
+      dest.parent[1].line.remove();
+      selected.children.delete(dest);
+    }
+    dest.tier = selected.tier + 1
+    newLine = createNewLine(`line_${selected.id}_${dest.id}`,selected.shape.xMid,selected.shape.yMid,dest.shape.xMid,dest.shape.yMid,colourArray[selected.tier],12 * (1/(selected.tier+1)));
+    selected.children.set(dest,new Link(newLine));
+    dest.parent = [selected,new Link(newLine)]
+    updateChildLinks(dest)
+  }  
   area.prepend(newLine);
 
-  selected.links.set(dest,new Link(true,newLine));
-  dest.links.set(selected,new Link(false,newLine));
 
+
+}
+
+function updateChildLinks(node){
+  for (const x of node.children.keys()) {
+    x.tier = node.tier + 1
+    console.log(x.parent[1].line)
+    x.parent[1].line.setAttribute('stroke',colourArray[node.tier]);
+    x.parent[1].line.setAttribute('stroke-width',12 * (1/(node.tier+1)));
+    console.log(x)
+    updateChildLinks(x);
+  }
 }
 
 function endDrawingLink(){
@@ -422,25 +478,31 @@ function endDrawingLink(){
 }
 
 function changeLinks(){
-  for (const x of selected.links.values()) {
-    if (x.startNode){
-      x.line.setAttribute('x1',selected.shape.xMid);
-      x.line.setAttribute('y1',selected.shape.yMid);
-    }else{
-      x.line.setAttribute('x2',selected.shape.xMid);
-      x.line.setAttribute('y2',selected.shape.yMid);
-    }
+  for (const x of selected.children.values()) {
+    x.line.setAttribute('x1',selected.shape.xMid);
+    x.line.setAttribute('y1',selected.shape.yMid);
+  }
+  if (selected.parent){
+    selected.parent[1].line.setAttribute('x2',selected.shape.xMid);
+    selected.parent[1].line.setAttribute('y2',selected.shape.yMid)
   }
 }
 
 function removeAllLinks(){
-  for (const x of selected.links.keys()) {
-    y = x.links.get(selected);
-    y.line.remove();
-    x.links.delete(y);
+  if (selected.parent){
+    selected.parent[0].children.delete(selected);
+    selected.parent[1].line.remove();
+  }
+  for (const x of selected.children.entries()) {
+    x[0].tier = 0
+    updateChildLinks(x[0]);
+    x[1].line.remove();
   }
   
 }
+
+
+
 
 /*
 Functions for changing the size of the given element
