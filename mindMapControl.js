@@ -414,59 +414,56 @@ function connectBox(e){
   dest = groupObjects.get(e.currentTarget);
 
   if (selected.potentialLink.connectingToParent){
-    if (dest.parent && dest.parent[0] == selected){
-      dest.parent[1].line.remove();
-      selected.children.delete(dest);
-      dest.tier = 0
-      dest.parent = null;
-      updateChildLinks(dest)
-    }
-    if (selected.parent){
-      if (selected.parent[0]==dest){
-        return;
-      }
-      selected.parent[1].line.remove();
-      dest.children.delete(selected);
-    }
-    selected.tier = dest.tier + 1
-    newLine = createNewLine(`line_${selected.id}_${dest.id}`,dest.shape.xMid,dest.shape.yMid,selected.shape.xMid,selected.shape.yMid,colourArray[dest.tier],12 * (1/(dest.tier+1)));
-    selected.parent = [dest,new Link(newLine)]
-    dest.children.set(selected,new Link(newLine));
-    updateChildLinks(selected);
+    establishLink(dest,selected);
   }else{
-    if (selected.parent && selected.parent[0] == dest){
-      selected.parent[1].line.remove();
-      dest.children.delete(selected);
-      selected.tier = 0
-      selected.parent = null;
-      updateChildLinks(selected)
-    }
-    if (dest.parent){
-      if (dest.parent[0]==selected){
-        return;
-      }
-      dest.parent[1].line.remove();
-      selected.children.delete(dest);
-    }
-    dest.tier = selected.tier + 1
-    newLine = createNewLine(`line_${selected.id}_${dest.id}`,selected.shape.xMid,selected.shape.yMid,dest.shape.xMid,dest.shape.yMid,colourArray[selected.tier],12 * (1/(selected.tier+1)));
-    selected.children.set(dest,new Link(newLine));
-    dest.parent = [selected,new Link(newLine)]
-    updateChildLinks(dest)
+    establishLink(selected,dest);
   }  
+
+function establishLink(parentElement,childElement){
+  ancestor = isAncestor(parentElement,childElement)
+  if (ancestor){
+    ancestor.parent[1].line.remove();
+    ancestor.parent[0].children.delete(ancestor);
+    ancestor.tier = 0
+    ancestor.parent = null;
+    updateChildLinks(ancestor)
+  }
+
+  if (childElement.parent){
+    if (childElement.parent[0]==parentElement){
+      return;
+    }
+    childElement.parent[1].line.remove();
+    childElement.parent[0].children.delete(childElement);
+    childElement.parent = null;
+  }
+
+  childElement.tier = parentElement.tier + 1
+  newLine = createNewLine(`line_${parentElement.id}_${childElement.id}`,parentElement.shape.xMid,parentElement.shape.yMid,childElement.shape.xMid,childElement.shape.yMid,colourArray[parentElement.tier],12 * (1/(parentElement.tier+1)));
   area.prepend(newLine);
+  parentElement.children.set(childElement,new Link(newLine));
+  childElement.parent = [parentElement,new Link(newLine)]
+  updateChildLinks(childElement)
+  
+}
 
-
+function isAncestor(parentElement,childElement){
+  while (parentElement.parent){
+    if (parentElement.parent[0] == childElement){
+      return parentElement;
+    }
+    parentElement = parentElement.parent[0]
+  }
+  return null;
+}
 
 }
 
 function updateChildLinks(node){
   for (const x of node.children.keys()) {
     x.tier = node.tier + 1
-    console.log(x.parent[1].line)
     x.parent[1].line.setAttribute('stroke',colourArray[node.tier]);
     x.parent[1].line.setAttribute('stroke-width',12 * (1/(node.tier+1)));
-    console.log(x)
     updateChildLinks(x);
   }
 }
