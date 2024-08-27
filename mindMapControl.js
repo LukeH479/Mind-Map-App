@@ -369,8 +369,9 @@ function removeLinkNodes(){
   selected.topNode = null;
 }
 
-function createNewLine(id,x1,y1,x2,y2,colour,width){
+function createNewLine(className,id,x1,y1,x2,y2,colour,width){
   newLine = document.createElementNS("http://www.w3.org/2000/svg","line")
+  newLine.setAttribute('class',className)
   newLine.setAttribute('id',id)
   newLine.setAttribute('x1',x1)
   newLine.setAttribute('y1',y1)
@@ -384,7 +385,7 @@ function createNewLine(id,x1,y1,x2,y2,colour,width){
 function parentConnection(e){
   drawingLink = true;
   e.stopPropagation();
-  newLine = createNewLine(`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,e.pageX,e.pageY,'red',5);
+  newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,e.pageX,e.pageY,'red',5);
   area.appendChild(newLine);
   selected.potentialLink = new PotentialLink(true,newLine);
 
@@ -394,7 +395,7 @@ function parentConnection(e){
 function childConnection(e){
   drawingLink = true;
   e.stopPropagation();
-  newLine = createNewLine(`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,e.pageX,e.pageY,'blue',5);
+  newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,e.pageX,e.pageY,'blue',5);
   area.appendChild(newLine);
   selected.potentialLink = new PotentialLink(false,newLine);
 
@@ -402,8 +403,8 @@ function childConnection(e){
 }
 
 function followMouseWithLine(e){
-  selected.potentialLink.line.setAttribute('x2',e.pageX-10)
-  selected.potentialLink.line.setAttribute('y2',e.pageY+10)
+  selected.potentialLink.line.setAttribute('x2',e.pageX)
+  selected.potentialLink.line.setAttribute('y2',e.pageY)
 }
 
 function connectBox(e){
@@ -439,7 +440,7 @@ function establishLink(parentElement,childElement){
   }
 
   childElement.tier = parentElement.tier + 1
-  newLine = createNewLine(`line_${parentElement.id}_${childElement.id}`,parentElement.shape.xMid,parentElement.shape.yMid,childElement.shape.xMid,childElement.shape.yMid,colourArray[parentElement.tier],12 * (1/(parentElement.tier+1)));
+  newLine = createNewLine("permanent",`line_${parentElement.id}_${childElement.id}`,parentElement.shape.xMid,parentElement.shape.yMid,childElement.shape.xMid,childElement.shape.yMid,colourArray[parentElement.tier],12 * (1/(parentElement.tier+1)));
   area.prepend(newLine);
   parentElement.children.set(childElement,new Link(newLine));
   childElement.parent = [parentElement,new Link(newLine)]
