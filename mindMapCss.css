@@ -2,10 +2,9 @@
     display: none;
 }
 
-/* line{
-    stroke:red;
-    stroke-width:5;
-} */
+line:hover{
+    cursor: pointer;
+}
 
 .temporary{
     pointer-events: none;

@@ -13,46 +13,502 @@ area = document.getElementById("mySvg");
 area.addEventListener("mousedown", clickOnSVG);
 document.addEventListener("keydown", deleteSelect);
 
-function Group(id,group,shape,fullText,displayText){
-  this.id = id
-  this.group = group
-  this.shape = shape;
-  this.outlineRect = null;
-  this.fullText = fullText;
-  this.displayText = displayText;
+class Tree{
+  constructor(group){
+    this.root = group 
+    selected.unselect();
+    this.descendants = []
+    this.traverseTree(group);
+  }
 
-  this.parent = null;
-  this.tier = 0;
-  this.children = new Map();
+  traverseTree(node){
+    this.descendants.push(node);
+    for (const x of node.children.entries()) {
+      this.descendants.push(x[1])
+      this.traverseTree(x[0])
+    }
+  }
 
-  this.circs = [];
-  this.potentialLink = null;
-  this.topNode = null;
-  this.botNode = null;
+  select(){
+    for (const x of this.descendants){
+      x.select();
+    }
+  }
 
+  unselect(){
+    for (const x of this.descendants){
+      x.unselect();
+    }
+  }
+
+  deleteSelect(){
+    for (const x of this.descendants){
+      if (typeof x != 'Link'){
+        x.deleteSelect();
+      }
+    }
+  }
+
+  dragElement(e){
+    for (const x of this.descendants){
+      x.lastGrabbed[0] = this.lastGrabbed[0];
+      x.lastGrabbed[1] = this.lastGrabbed[1];
+      x.dragElement(e);
+    }
+    this.lastGrabbed = [e.pageX,e.pageY]
+  }
 }
 
-function Rectangle(rect){
-  this.rect = rect;
-  this.x = +rect.getAttribute('x');
-  this.y = +rect.getAttribute('y');
-  this.id = rect.getAttribute('id');
-  this.width = +rect.getAttribute('width');
-  this.height = +rect.getAttribute('height');
-  this.yMid = this.y+(this.height/2);
-  this.yEnd = this.y+this.height;
-  this.xMid = this.x+(this.width/2);
-  this.xEnd = this.x+this.width;
+class Group{
+  constructor(id,group,shape,fullText,displayText){
+    this.id = id
+    this.group = group
+    this.shape = shape;
+    
+    this.text = new elementText(this.shape,fullText,displayText);
+    this.topNode = null
+    this.botNode = null
+    this.outlineRect = null;
+
+    this.parent = null;
+    this.tier = 0;
+    this.children = new Map();
+
+    this.circles = [];
+    this.potentialLink = null;
+    this.lastGrabbed = [];
+  }
+  
+  select() {
+    this.drawCircles();
+    this.topNode = new NodeForParentConnections(this.shape);
+    this.botNode = new NodeForChildConnections(this.shape);
+  }
+
+  drawCircles(){
+    let s = this.shape
+    let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]];
+    for (let i = 0; i < 8; i++ ){
+      this.circles[i] = new circleForExpanding(`${this.id}_circ${i}`,pos[i][0],pos[i][1])
+      this.circles[i].circle.addEventListener("mousedown",expand);
+    }
+  }
+  
+  unselect() {
+    this.removeCircles();
+    if (creatingNewShape == false){
+      this.topNode.removeLinkNode();
+      this.topNode = null;
+      this.botNode.removeLinkNode();
+      this.botNode = null;
+    }
+    selected = null;
+  }
+
+  removeCircles(){
+    for (let i = 0; i < 8; i++){
+      this.circles[i].removeCircle();
+    }
+    this.circles = []
+  }
+  
+  deleteSelect() {
+    this.removeAllLinks();
+    this.unselect();
+    this.text.removeText();
+    this.group.remove();
+    area.onmousemove = null;
+    area.onmouseup = null;
+    creatingNewShape = false;
+  }
+
+  removeAllLinks(){
+    if (this.parent){
+      this.parent[0].children.delete(this);
+      this.parent[1].line.remove();
+    }
+    for (const x of this.children.entries()) {
+      x[0].tier = 0
+      updateChildLinks(x[0]);
+      x[1].line.remove();
+    }
+    
+  }
+
+  dragElement(e) {
+    let dx = e.pageX - this.lastGrabbed[0]
+    let dy = e.pageY - this.lastGrabbed[1]
+    for (let i = 0; i<8; i++){
+      this.circles[i].moveByAmount(dx,dy);
+    }
+    this.shape.moveByAmount(dx,dy);
+    this.text.moveByAmount(dx,dy);
+    if (creatingNewShape == false){
+      this.topNode.moveByAmount(dx,dy);
+      this.botNode.moveByAmount(dx,dy);
+    }
+    this.moveParentLink();
+    this.moveChildLinks();
+    this.lastGrabbed = [e.pageX,e.pageY]
+  }
+  
+  
+  resizedElement(){
+    this.shape.recalculate();
+    this.recalculateCircles();
+    this.text.recalculate(this.shape);
+    if (creatingNewShape == false){
+      this.topNode.recalculate(this.shape);
+      this.botNode.recalculate(this.shape);
+      this.moveParentLink();
+      this.moveChildLinks();
+    }
+  }
+
+  recalculateCircles(){
+    let s = this.shape
+    let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]]
+    for (let i = 0; i < 8; i++ ){
+      this.circles[i].moveTo(pos[i][0],pos[i][1])
+    }
+  }
+
+  moveParentLink(){
+    if (this.parent){
+      this.parent[1].line.setAttribute('x2',this.shape.xMid);
+      this.parent[1].line.setAttribute('y2',this.shape.yMid)
+    }
+  }
+
+  moveChildLinks(){
+    for (const x of this.children.values()) {
+      x.line.setAttribute('x1',this.shape.xMid);
+      x.line.setAttribute('y1',this.shape.yMid);
+    }
+  }
 }
 
-function Link(line) {
-  this.line = line;
+class Link {
+  constructor(line,parent,child){
+    this.line = line;
+    this.parent = parent;
+    this.child = child;
+    this.lastGrabbed = []
+    this.circles = [];
+  }
+
+  select(){
+    this.drawCircles();
+    this.line.setAttribute('stroke','purple')
+    
+  }
+    
+  unselect(){
+    this.removeCircles();
+    this.line.setAttribute('stroke',colourArray[this.parent.tier])
+    selected = null;
+  }
+    
+  deleteSelect(e){
+    this.removeCircles();
+    this.parent.children.delete(this.child)
+    this.line.remove();
+    this.child.tier = 0;
+    updateChildLinks(this.child);
+    this.child.parent = null;
+    selected = null;
+  }
+
+  drawCircles(){
+    this.circles[0] = new circleForExpanding(null,this.parent.shape.xMid,this.parent.shape.yMid);
+    this.circles[1] = new circleForExpanding(null,this.child.shape.xMid,this.child.shape.yMid)
+  }
+  
+  removeCircles(){
+    this.circles[0].removeCircle();
+    this.circles[1].removeCircle();
+    this.circles = []
+  }
+
+  dragElement(e){
+    let dx = e.pageX - this.lastGrabbed[0]
+    let dy = e.pageY - this.lastGrabbed[1]
+    this.circles[0].moveByAmount(dx,dy);
+    this.circles[1].moveByAmount(dx,dy);
+    this.lastGrabbed = [e.pageX,e.pageY]
+  }
+  
 }
 
-function PotentialLink(parent,line){
-  this.connectingToParent = parent;
-  this.line = line;
+class circleForExpanding{
+  constructor(id,cx,cy){
+    this.circle = createNewCircle(null,id,5,cx,cy,'white','black');
+    this.cx = cx
+    this.cy = cy
+    area.appendChild(this.circle);
+  }
+
+  moveByAmount(dx,dy){
+    this.cx += dx
+    this.cy += dy
+    this.circle.setAttribute('cx',this.cx);
+    this.circle.setAttribute('cy',this.cy);
+  }
+
+  moveTo(x,y){
+    this.cx = x
+    this.cy = y
+    this.circle.setAttribute('cx',this.cx);
+    this.circle.setAttribute('cy',this.cy);
+  }
+
+  removeCircle(){
+    this.circle.remove();
+  }
 }
+
+class NodeForParentConnections{
+  constructor(shape){
+    this.x = 0
+    this.y = 0
+    this.topNode = this.drawLinkNodes(shape)
+  }
+
+  drawLinkNodes(shape){
+    let width = shape.width/2;
+    let height = 10;
+    this.x = shape.x + (shape.width/4);
+    this.y = shape.y - 15;
+
+    let topNode = createNewRectangle(null,null,this.x,this.y,width,height,'red','black',15)
+    area.appendChild(topNode);
+    
+    topNode.addEventListener("mousedown",this.parentConnection);
+    return topNode;
+  }
+
+  moveTo(x,y){
+    this.x = x
+    this.y = y
+    this.topNode.setAttribute('x',this.x);
+    this.topNode.setAttribute('y',this.y);
+  }
+
+  moveByAmount(dx,dy){
+    this.x += dx;
+    this.y += dy;
+    this.topNode.setAttribute('x',this.x);
+    this.topNode.setAttribute('y',this.y);
+  }
+
+  recalculate(shape){
+    let width = shape.width/2;
+    this.topNode.setAttribute('width',width);
+    let x = shape.x + (shape.width/4);
+    let y = shape.y - 15;
+    this.moveTo(x,y)
+  }
+
+  removeLinkNode(){
+    this.topNode.remove();
+  }
+
+  parentConnection(e){
+    if (drawingLink){
+      selected.potentialLink.line.remove();
+      selected.potentialLink = null;
+    }
+    drawingLink = true;
+    e.stopPropagation();
+    newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,e.pageX,e.pageY,'red',5);
+    area.appendChild(newLine);
+    selected.potentialLink = new PotentialLink(true,newLine);
+  
+    onmousemove = followMouseWithLine;
+  }
+} 
+
+class NodeForChildConnections{
+  constructor(shape){
+    this.x = 0
+    this.y = 0
+    this.bottomNode = this.drawLinkNodes(shape)
+  }
+
+  drawLinkNodes(shape){
+    let width = shape.width/2;
+    let height = 10;
+    this.x = shape.x + (shape.width/4);
+    this.y = shape.y + shape.height + 5;
+
+    let bottomNode = createNewRectangle(null,null,this.x,this.y,width,height,'blue','black',15)
+    area.appendChild(bottomNode);
+    
+    bottomNode.addEventListener("mousedown",this.childConnection);
+    return bottomNode
+  }
+
+  moveTo(x,y){
+    this.x = x
+    this.y = y
+    this.bottomNode.setAttribute('x',this.x);
+    this.bottomNode.setAttribute('y',this.y);
+  }
+
+  moveByAmount(dx,dy){
+    this.x += dx;
+    this.y += dy;
+    this.bottomNode.setAttribute('x',this.x);
+    this.bottomNode.setAttribute('y',this.y);
+  }
+
+  recalculate(shape){
+    let width = shape.width/2;
+    this.bottomNode.setAttribute('width',width);
+    let x = shape.x + (shape.width/4);
+    let y = shape.y + shape.height + 5;
+    this.moveTo(x,y)
+  }
+
+  removeLinkNode(){
+    this.bottomNode.remove();
+  }
+
+  childConnection(e){
+    if (drawingLink){
+      selected.potentialLink.line.remove();
+      selected.potentialLink = null;
+    }
+    drawingLink = true;
+    e.stopPropagation();
+    newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,e.pageX,e.pageY,'blue',5);
+    area.appendChild(newLine);
+    selected.potentialLink = new PotentialLink(false,newLine);
+  
+    onmousemove = followMouseWithLine;
+  }
+} 
+
+class elementText{
+  constructor(shape,fullText,displayText){
+    this.fullText = fullText;
+    this.displayText = displayText;
+    this.x = shape.x
+    this.y = shape.y
+  }
+
+  moveByAmount(dx,dy){
+    this.x += dx
+    this.y += dy
+    this.displayText.setAttribute('y',this.y);
+    for (const child of this.displayText.children) {
+      child.setAttribute('x',this.x);
+    }
+  }
+
+  moveTo(x,y){
+    this.x = x
+    this.y = y
+    this.displayText.setAttribute('x',this.x);
+    this.displayText.setAttribute('y',this.y);
+  }
+  
+  recalculate(shape){
+    this.moveTo(shape.x,shape.y)
+    this.fitToBox(shape)
+  }
+
+  fitToBox(shape){
+    let numLines = shape.height / 12
+    const lines = []
+    let lineLength = shape.width / 8
+    let words = this.fullText.split(" ");
+  
+    this.displayText.replaceChildren();
+  
+    let currLine = 0;
+    let currPos = 0;
+    let wordLength;
+    for (let i = 0; i < words.length; i++){
+      wordLength = words[i].length;
+      if (currPos + wordLength > lineLength){
+        currPos = wordLength
+        currLine++
+        if (wordLength > lineLength){
+        lines[currLine] = "...";
+          break;
+        }
+        lines[currLine] = words[i];
+      }else{
+        if (currLine == 0 && currPos == 0){
+          lines[currLine] = words[i];
+        }else{
+          lines[currLine] += " " + words[i];
+        }
+        currPos += wordLength;
+      }
+    }
+  
+    if (lines[0] == undefined){
+      return 0;
+    }
+  
+    let newText;
+    for (let i = 0; i <= currLine; i++){
+      if (i >= numLines - 1){
+        newText = "<tspan dy = '10' dx = '0' x='"+this.x+"'>...</tspan>";
+        this.displayText.insertAdjacentHTML('beforeend', newText);
+  
+        break;
+      }
+      newText = "<tspan dy = '10' dx = '0' x='"+this.x+"'>"+lines[i]+"</tspan>";
+      this.displayText.insertAdjacentHTML('beforeend', newText);
+    }
+  
+  }
+  
+  removeText(){
+    this.displayText.remove();
+  }
+}
+
+class Rectangle{
+  constructor(rect){
+    this.rect = rect;
+    this.recalculate();
+  }
+
+  recalculate(){
+    this.x = +this.rect.getAttribute('x');
+    this.y = +this.rect.getAttribute('y');
+    this.id = this.rect.getAttribute('id');
+    this.width = +this.rect.getAttribute('width');
+    this.height = +this.rect.getAttribute('height');
+    this.yMid = this.y+(this.height/2);
+    this.yEnd = this.y+this.height;
+    this.xMid = this.x+(this.width/2);
+    this.xEnd = this.x+this.width;
+  }
+
+  moveByAmount(dx,dy){
+    this.x += dx
+    this.y += dy
+    this.rect.setAttribute('x',this.x);
+    this.rect.setAttribute('y',this.y);
+    this.recalculate();
+    this.lastGrabbed = []
+  }
+}
+
+
+class PotentialLink{
+  constructor(parent,line){
+    this.connectingToParent = parent;
+    this.line = line;
+  }
+}
+
+
 
 let creatingNewShape = false;
 let drawingLink = false;
@@ -60,11 +516,7 @@ let elementsCreated = 0;
 
 let selected = null;
 
-let posGrabbedX, posGrabbedY
 let groupObjects = new Map();
-/*
-Function that deal with user mousedown interactions
-*/
 
 //The user clicks on the svg area but no element
 function clickOnSVG(e){
@@ -73,17 +525,18 @@ function clickOnSVG(e){
   
   }else if (creatingNewShape){
     selected.group.addEventListener("mousedown", clickOnElement, false);
-    unselect();
+    selected.group.addEventListener("dblclick", dbClickOnElement, false);
+    selected.unselect();
     area.onmousemove = null;
     creatingNewShape = false;
   
   }else if (selected != null){
-    unselect();
+    selected.unselect();
 
   }else{
     selected = createNewElement(e);
     groupObjects.set(selected.group,selected)
-    drawCircles();
+    selected.drawCircles();
     area.onmousemove = (event => drawBox(event,e.pageX,e.pageY));
     elementsCreated++
     creatingNewShape = true;
@@ -92,22 +545,77 @@ function clickOnSVG(e){
 
 //The user clicks on a shape
 function clickOnElement(e) {
-  if (creatingNewShape == true){
-    return 0;
+  if (creatingNewShape){
+    return;
   }
   e.stopPropagation();
-  if (drawingLink == true){
-    if (e.currentTarget != selected.group){
-      connectBox(e);
+  if (drawingLink){
+    clickedOnObject = groupObjects.get(e.currentTarget)
+    if (clickedOnObject != selected.group){
+      connectBox(clickedOnObject);
     }
-    return 0;
+    return;
   }
   if (selected == null){
-    select(e);
-  }else if (e.currentTarget != selected.group){
-    unselect();
-    select(e);
+    selected = groupObjects.get(e.currentTarget);
+    selected.select();
+  }else if (groupObjects.get(e.currentTarget) != selected){
+    selected.unselect();
+    selected = groupObjects.get(e.currentTarget);
+    selected.select();
   }
+  startMovement(e);
+}
+
+function startMovement(e){
+  selected.lastGrabbed = [e.pageX,e.pageY];
+  area.onmousemove = dragElement;
+  area.onmouseup = (e => {dragElement(e); dropElement(e)});
+}
+
+function dragElement(e){
+  if (typeof selected != 'Link'){
+    selected.dragElement(e)
+  }
+}
+function dropElement() {
+  area.onmouseup = null;
+  area.onmousemove = null;
+}
+
+function clickOnConnection(e){
+  if (drawingLink){
+    endDrawingLink(); 
+    return;
+  }else if (creatingNewShape){
+    return;
+  }
+  e.stopPropagation();
+  if (selected == null){
+    selected = groupObjects.get(e.currentTarget);
+    selected.select();
+  }else if (groupObjects.get(e.currentTarget) != selected){
+    selected.unselect();
+    selected = groupObjects.get(e.currentTarget);
+    selected.select();
+  }
+}
+
+function deleteSelect(e){
+  if (drawingLink == true){
+    endDrawingLink();
+    return;
+  }
+  if (e.keyCode == 8 && selected != null){
+    selected.deleteSelect();
+    selected = null;
+  }
+}
+
+function dbClickOnElement(e){
+  group = groupObjects.get(e.currentTarget);
+  selected = new Tree(group)
+  selected.select();
   startMovement(e);
 }
 
@@ -124,88 +632,15 @@ function createNewElement(e){
   newRect.setAttribute('fill',"white")
   newRect.setAttribute('stroke',"black")
   newGroup.appendChild(newRect);
-  fullText = document.createElementNS("http://www.w3.org/2000/svg","text")
-  fullText.setAttribute("class","fullText");
-  fullText.setAttribute('id',`fullText_rect${elementsCreated}`)
-  fullText.innerHTML = "Lorem ipsum dolor sit amet consectetur adipisicing elit. Saepe obcaecati, omnis est recusandae hic possimus consequatur labore in. Esse dicta sunt, molestiae cum velit expedita ipsa cupiditate modi ea iste!";
-  newGroup.appendChild(fullText);
+
+  fullText = "Lorem ipsum dolor sit amet consectetur adipisicing elit. Saepe obcaecati, omnis est recusandae hic possimus consequatur labore in. Esse dicta sunt, molestiae cum velit expedita ipsa cupiditate modi ea iste!";
   displayText = document.createElementNS("http://www.w3.org/2000/svg","text")
   displayText.setAttribute('id',`text_rect${elementsCreated}`)
   newGroup.appendChild(displayText);
 
   return new Group(`rect${elementsCreated}`,newGroup, new Rectangle(newRect),fullText,displayText);
 }
-/*
-These functions deal with the process of selecting, unselecting and deleting selected elements
-*/
-function select(e){
-  selected = groupObjects.get(e.currentTarget);
-  drawCircles(selected);
-  drawLinkNodes(selected);
-}
 
-function unselect(){
-  removeCircles();
-  if (creatingNewShape == false){
-    removeLinkNodes();
-  }
-  selected = null;
-}
-
-function deleteSelect(e){
-  if (drawingLink == true){
-    endDrawingLink();
-    return 0;
-  }
-  if (e.keyCode == 8 && selected != null){
-    removeCircles();
-    removeText();
-    removeAllLinks();
-    if (creatingNewShape == false){
-      removeLinkNodes();
-    }
-    selected.group.remove();
-    area.onmousemove = null;
-    area.onmouseup = null;
-    creatingNewShape = false;
-    
-    selected = null;
-  }
-}
-
-/**
- * These functions are used for starting and stopping the movement of the text box
- */
-
-function startMovement(e){
-  posGrabbedX = e.pageX - selected.shape.x;   
-  posGrabbedY = e.pageY - selected.shape.y;   
-  
-  area.onmousemove = dragElement;
-  area.onmouseup = (e => {dragElement(e); dropElement(e)});
-}
-
-function dragElement(e) {
-  e.preventDefault();
-  selected.shape.rect.setAttribute("x", e.pageX - posGrabbedX);
-  selected.shape.rect.setAttribute("y", e.pageY - posGrabbedY);
-  movedElement();
-}
-
-function movedElement(){
-  selected.shape = new Rectangle(selected.shape.rect)
-  changeText();
-  changeCircles();
-  if (creatingNewShape == false){
-    changeLinkNodes();
-  }
-  changeLinks();
-}
-
-function dropElement() {
-  area.onmouseup = null;
-  area.onmousemove = null;
-}
 
 /*
 Functions for creating the element itself
@@ -232,144 +667,28 @@ function drawBox(e,origX,origY){
   selected.shape.rect.setAttribute("y", y);
   selected.shape.rect.setAttribute("width", width);
   selected.shape.rect.setAttribute("height", height);
+  selected.resizedElement();
 
-  movedElement();
 }
 
 /*
 * Functions used for creating, moving and deleting circles
  */
 
-function drawCircles(){
-  s = selected.shape
-  let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]];
-  for (let i = 0; i < 8; i++ ){
-    newCirc = '<circle id="'+selected.id+'_'+i+'" r="5" cx="'+pos[i][0]+'" cy="'+pos[i][1]+'" fill="white" stroke="black"/>'
-    selected.group.insertAdjacentHTML('beforeend', newCirc);
-    selected.circs[i] = document.getElementById(selected.id+"_"+i)
-    selected.circs[i].addEventListener("mousedown",expand);
-  }
-  
+
+function createNewCircle(className,id,r,cx,cy,fill,stroke){
+  newCirc = document.createElementNS("http://www.w3.org/2000/svg","circle")
+  newCirc.setAttribute('class',className)
+  newCirc.setAttribute('id',id)
+  newCirc.setAttribute('r',r)
+  newCirc.setAttribute('cx',cx)
+  newCirc.setAttribute('cy',cy)
+  newCirc.setAttribute('fill',fill)
+  newCirc.setAttribute('stroke',stroke)
+  return newCirc;
 }
 
-function changeCircles(){
-  s = selected.shape
-  let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]]
-  for (let i = 0; i<8; i++){
-    selected.circs[i].setAttribute("cx",pos[i][0])
-    selected.circs[i].setAttribute("cy",pos[i][1])
-  }
-}
-
-function removeCircles(){
-  for (let i = 0; i < 8; i++){
-    selected.circs[i].remove();
-    selected.circs[i] = null;
-  }
-}
-
-/*
-* Functions for creating, moving and changing text
-*/
-function changeText(){
-  fullText = document.getElementById("fullText_"+selected.id)
-  displayText = document.getElementById("text_"+selected.id)
-  displayText.setAttribute('x',selected.shape.x)
-  displayText.setAttribute('y',selected.shape.y)
-  fitToBox(displayText,fullText);
-}
-
-function fitToBox(displayText,fullText){
-  let numLines = selected.shape.height / 12
-  const lines = []
-  let lineLength = selected.shape.width / 8
-  let words = fullText.innerHTML.split(" ");
-
-  displayText.innerHTML = "";
-
-  let currLine = 0;
-  let currPos = 0;
-  let wordLength;
-  for (let i = 0; i < words.length; i++){
-    wordLength = words[i].length;
-    if (currPos + wordLength > lineLength){
-      currPos = wordLength
-      currLine++
-      if (wordLength > lineLength){
-      lines[currLine] = "...";
-        break;
-      }
-      lines[currLine] = words[i];
-    }else{
-      if (currLine == 0 && currPos == 0){
-        lines[currLine] = words[i];
-      }else{
-        lines[currLine] += " " + words[i];
-      }
-      currPos += wordLength;
-    }
-  }
-
-  if (lines[0] == undefined){
-    return 0;
-  }
-
-  let newText;
-  for (let i = 0; i <= currLine; i++){
-    if (i >= numLines - 1){
-      newText = "<tspan dy = '10' dx = '0' x='"+selected.shape.x+"'>...</tspan>";
-      displayText.insertAdjacentHTML('beforeend', newText);
-
-      break;
-    }
-    newText = "<tspan dy = '10' dx = '0' x='"+selected.shape.x+"'>"+lines[i]+"</tspan>";
-    displayText.insertAdjacentHTML('beforeend', newText);
-  }
-
-}
-
-function removeText(){
-  document.getElementById("text_"+selected.id).remove();
-  document.getElementById("fullText_"+selected.id).remove();
-}
-
-/*
-* Functions for creating, moving and removing links
-*/
-
-function drawLinkNodes(){
-  topBox = `<rect id="${selected.id}_linkParent" width=${selected.shape.width / 2} height="10" x="${selected.shape.x + (selected.shape.width/4)}" y="${selected.shape.y - 15}"fill='red' stroke='black'/>`
-  botBox = `<rect id="${selected.id}_linkChild" width=${selected.shape.width / 2} height="10" x="${selected.shape.x + (selected.shape.width/4)}" y="${selected.shape.y +selected.shape.height + 10}"fill='blue' stroke='black'/>`
-  
-  area.insertAdjacentHTML('beforeend', topBox);
-  area.insertAdjacentHTML('beforeend', botBox);
-
-  t = document.getElementById(`${selected.id}_linkParent`)
-  t.addEventListener("mousedown",parentConnection);
-  selected.topNode = t
-  b = document.getElementById(`${selected.id}_linkChild`)
-  b.addEventListener("mousedown",childConnection);
-  selected.botNode = b
-}
-
-function changeLinkNodes(){
-  selected.topNode.setAttribute('x',selected.shape.x + (selected.shape.width/4));
-  selected.topNode.setAttribute('y',selected.shape.y - 15);
-  selected.topNode.setAttribute('width',selected.shape.width / 2);
-
-  selected.botNode.setAttribute('x',selected.shape.x + (selected.shape.width/4));
-  selected.botNode.setAttribute('y',selected.shape.y +selected.shape.height + 10);
-  selected.botNode.setAttribute('width',selected.shape.width / 2);
-}
-
-function removeLinkNodes(){
-  selected.topNode.remove();
-  selected.topNode = null;
-  selected.botNode.remove();
-  selected.topNode = null;
-}
-
-function createNewLine(className,id,x1,y1,x2,y2,colour,width){
+function createNewLine(className,id,x1,y1,x2,y2,stroke,width){
   newLine = document.createElementNS("http://www.w3.org/2000/svg","line")
   newLine.setAttribute('class',className)
   newLine.setAttribute('id',id)
@@ -377,42 +696,43 @@ function createNewLine(className,id,x1,y1,x2,y2,colour,width){
   newLine.setAttribute('y1',y1)
   newLine.setAttribute('x2',x2);
   newLine.setAttribute('y2',y2);
-  newLine.setAttribute('stroke',colour)
+  newLine.setAttribute('stroke',stroke)
   newLine.setAttribute('stroke-width',width)
   return newLine;
 }
 
-function parentConnection(e){
-  drawingLink = true;
-  e.stopPropagation();
-  newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,e.pageX,e.pageY,'red',5);
-  area.appendChild(newLine);
-  selected.potentialLink = new PotentialLink(true,newLine);
+function createNewRectangle(className,id,x,y,width,height,fill,stroke,rx){
+  newRect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+  newRect.setAttribute('class',className);
+  newRect.setAttribute('id',id);
+  newRect.setAttribute('x',x);
+  newRect.setAttribute('y',y);
+  newRect.setAttribute('width',width);
+  newRect.setAttribute('height',height);
+  newRect.setAttribute('fill',fill);
+  newRect.setAttribute('stroke',stroke);
+  newRect.setAttribute('rx',rx);
 
-  onmousemove = followMouseWithLine;
+  return newRect;
 }
 
-function childConnection(e){
-  drawingLink = true;
-  e.stopPropagation();
-  newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,e.pageX,e.pageY,'blue',5);
-  area.appendChild(newLine);
-  selected.potentialLink = new PotentialLink(false,newLine);
-
-  onmousemove = followMouseWithLine;
-}
 
 function followMouseWithLine(e){
   selected.potentialLink.line.setAttribute('x2',e.pageX)
   selected.potentialLink.line.setAttribute('y2',e.pageY)
 }
 
-function connectBox(e){
+function endDrawingLink(){
+  drawingLink = false;
+  selected.potentialLink.line.remove();
+  onmousemove = null
+}
+
+function connectBox(dest){
   drawingLink = false;
   onmousemove = null
 
   selected.potentialLink.line.remove();
-  dest = groupObjects.get(e.currentTarget);
 
   if (selected.potentialLink.connectingToParent){
     establishLink(dest,selected);
@@ -442,8 +762,11 @@ function establishLink(parentElement,childElement){
   childElement.tier = parentElement.tier + 1
   newLine = createNewLine("permanent",`line_${parentElement.id}_${childElement.id}`,parentElement.shape.xMid,parentElement.shape.yMid,childElement.shape.xMid,childElement.shape.yMid,colourArray[parentElement.tier],12 * (1/(parentElement.tier+1)));
   area.prepend(newLine);
-  parentElement.children.set(childElement,new Link(newLine));
-  childElement.parent = [parentElement,new Link(newLine)]
+  newLine.addEventListener("mousedown",clickOnConnection);
+  let lineElem = new Link(newLine,parentElement,childElement);
+  groupObjects.set(newLine,lineElem)
+  parentElement.children.set(childElement, lineElem);
+  childElement.parent = [parentElement,lineElem]
   updateChildLinks(childElement)
   
 }
@@ -469,35 +792,7 @@ function updateChildLinks(node){
   }
 }
 
-function endDrawingLink(){
-  drawingLink = false;
-  selected.potentialLink.line.remove();
-  onmousemove = null
-}
 
-function changeLinks(){
-  for (const x of selected.children.values()) {
-    x.line.setAttribute('x1',selected.shape.xMid);
-    x.line.setAttribute('y1',selected.shape.yMid);
-  }
-  if (selected.parent){
-    selected.parent[1].line.setAttribute('x2',selected.shape.xMid);
-    selected.parent[1].line.setAttribute('y2',selected.shape.yMid)
-  }
-}
-
-function removeAllLinks(){
-  if (selected.parent){
-    selected.parent[0].children.delete(selected);
-    selected.parent[1].line.remove();
-  }
-  for (const x of selected.children.entries()) {
-    x[0].tier = 0
-    updateChildLinks(x[0]);
-    x[1].line.remove();
-  }
-  
-}
 
 
 
@@ -510,28 +805,28 @@ function expand(e){
   e.stopPropagation();
   area.onmouseup = dropElement;
   switch(e.target){
-    case selected.circs[0]:
+    case selected.circles[0].circle:
       area.onmousemove = e => {expandUp(e) ;expandLeft(e)};
       break;
-    case selected.circs[1]:
+    case selected.circles[1].circle:
       area.onmousemove = expandLeft;
       break;
-    case selected.circs[2]:
+    case selected.circles[2].circle:
       area.onmousemove = e => {expandDown(e) ;expandLeft(e)};
       break;
-    case selected.circs[3]:
+    case selected.circles[3].circle:
       area.onmousemove = expandUp;
       break;
-    case selected.circs[4]:
+    case selected.circles[4].circle:
       area.onmousemove = expandDown;
       break;
-    case selected.circs[5]:
+    case selected.circles[5].circle:
       area.onmousemove = e => {expandUp(e) ;expandRight(e)};
       break;
-    case selected.circs[6]:
+    case selected.circles[6].circle:
       area.onmousemove = expandRight;
       break;
-    case selected.circs[7]:
+    case selected.circles[7].circle:
       area.onmousemove = e => {expandDown(e) ;expandRight(e)};
   }
 }
@@ -545,7 +840,7 @@ function expandLeft(e){
   if (newWidth >10){
     selected.shape.rect.setAttribute('x',newX);
     selected.shape.rect.setAttribute('width',newWidth);
-    movedElement();
+    selected.resizedElement();
   }
 }
 
@@ -554,7 +849,7 @@ function expandRight(e){
   
   if (newWidth >10){
     selected.shape.rect.setAttribute('width',newWidth);
-    movedElement();
+    selected.resizedElement();
   }
 }
 
@@ -565,7 +860,7 @@ function expandUp(e){
   if (newHeight >10){
     selected.shape.rect.setAttribute('y',newY);
     selected.shape.rect.setAttribute('height',newHeight);
-    movedElement();
+    selected.resizedElement();
   }
 }
 
@@ -574,7 +869,7 @@ function expandDown(e){
   
   if (newHeight >10){
     selected.shape.rect.setAttribute('height',newHeight);
-    movedElement();
+    selected.resizedElement();
   }
 }
 
