@@ -95,9 +95,8 @@ class Group{
     this.shape = shape;
     
     this.text = new elementText(this.shape,fullText,displayText);
-    this.topNode = null
-    this.botNode = null
     this.outlineRect = null;
+    this.floatingBoxes = []
 
     this.parent = null;
     this.tier = 0;
@@ -109,37 +108,30 @@ class Group{
   }
 
   drawBox(e,origX,origY){
-    let width, height;
-    let x , y;
+    //This method of box creation was choosen as we want to ensure a minimum size of element
     let adjX = adjustX(e.pageX);
     let adjY = adjustY(e.pageY);
     if (origX < adjX){
-      width = adjX - origX;
-      x = origX
+      this.shape.expandRight(e);
     }else{
-      width = origX - adjX;
-      x = adjX;
+      this.shape.expandLeft(e);
     }
   
     if (origY < adjY){
-      height = adjY- origY
-      y = origY
+      this.shape.expandDown(e);
     }else{
-      height = origY - adjY
-      y = adjY
+      this.shape.expandUp(e);
     }
-    this.shape.rect.setAttribute("x", x);
-    this.shape.rect.setAttribute("y", y);
-    this.shape.rect.setAttribute("width", width);
-    this.shape.rect.setAttribute("height", height);
+
     this.resizedElement(this);
   
   }
 
   select() {
     this.drawCircles();
-    this.topNode = new NodeForParentConnections(this.shape);
-    this.botNode = new NodeForChildConnections(this.shape);
+    this.floatingBoxes.push(new NodeForParentConnections(this.shape));
+    this.floatingBoxes.push(new NodeForChildConnections(this.shape));
+    this.floatingBoxes.push(new NodeForSelectingWholeGroup(this.shape))
     startWritinginInputForm(this.text.fullText);
   }
 
@@ -157,10 +149,10 @@ class Group{
   unselect() {
     this.removeCircles();
     if (creatingNewShape == false){
-      this.topNode.removeLinkNode();
-      this.topNode = null;
-      this.botNode.removeLinkNode();
-      this.botNode = null;
+      for (const x of this.floatingBoxes){
+        x.remove()
+      }
+      this.floatingBoxes = []
       this.text.recalculate(this.shape);
     }
     if (!inputBox.disabled){
@@ -209,8 +201,9 @@ class Group{
     this.shape.moveByAmount(dx,dy);
     this.text.moveByAmount(dx,dy);
     if (creatingNewShape == false){
-      this.topNode.moveByAmount(dx,dy);
-      this.botNode.moveByAmount(dx,dy);
+      for (const x of this.floatingBoxes){
+        x.moveByAmount(dx,dy);
+      }
     }
     this.moveParentLink();
     this.moveChildLinks();
@@ -253,8 +246,9 @@ class Group{
     this.recalculateCircles();
     this.text.recalculate(this.shape);
     if (creatingNewShape == false){
-      this.topNode.recalculate(this.shape);
-      this.botNode.recalculate(this.shape);
+      for (const x of this.floatingBoxes){
+        x.resizeElement(this.shape);
+      }
       this.moveParentLink();
       this.moveChildLinks();
     }
@@ -374,32 +368,42 @@ class circleForExpanding{
   }
 }
 
-class floatingRect{
-  constructor(shape,className,id,xFunc,yFunc,widthFunc,heightFunc,onClickFunc,fill,stroke,rx){
-    this.xFunc = xFunc;
-    this.yFunc = yFunc;
-    this.widthFunc = widthFunc;
-    this.heightFunc = heightFunc; 
 
+
+
+
+class floatingRect{
+  constructor(shape,icon,className,id,fill,stroke,rx){
     this.recalculate(shape);
 
-    this.elem = createNewRectangle(className,id,this.x,this.y,this.width,this.height,fill,stroke,rx)
-    area.appendChild(this.elem)
-    this.elem.addEventListener('mousdown',onClickFunc);
+    this.rect = createNewRectangle(className,id,this.x,this.y,this.width,this.height,fill,stroke,rx)
+    area.appendChild(this.rect)
+    this.rect.addEventListener('mousedown',this.onClickFunc);
+
+    if (icon){
+      this.icon = icon
+      this.setAllAttributes(this.icon)
+      area.appendChild(this.icon)
+    }
+    
   }
 
   moveTo(x,y){
     this.x = x
     this.y = y
-    this.elem.setAttribute('x',this.x);
-    this.elem.setAttribute('y',this.y);
+    this.setAllAttributes(this.rect);
+    if (this.icon){
+      this.setAllAttributes(this.icon);
+    }
   }
 
   moveByAmount(dx,dy){
     this.x += dx;
     this.y += dy;
-    this.elem.setAttribute('x',this.x);
-    this.elem.setAttribute('y',this.y);
+    this.setAllAttributes(this.rect);
+    if (this.icon){
+      this.setAllAttributes(this.icon);
+    }
   }
 
   recalculate(shape){
@@ -411,60 +415,51 @@ class floatingRect{
 
   resizeElement(shape){
     this.recalculate(shape)
-    this.elem.setAttribute('x',this.x);
-    this.elem.setAttribute('y',this.y);
-    this.elem.setAttribute('width',this.width);
-    this.elem.setAttribute('height',this.height);
+    this.setAllAttributes(this.rect);
+    if (this.icon){
+      this.setAllAttributes(this.icon);
+    }
+  }
+
+  setAllAttributes(element){
+    element.setAttribute('x',this.x);
+    element.setAttribute('y',this.y);
+    element.setAttribute('width',this.width);
+    element.setAttribute('height',this.height);
+  }
+
+  remove(){
+    this.rect.remove();
+    if (this.icon){
+      this.icon.remove();
+    }
   }
 }
 
 
 
-class NodeForParentConnections{
+class NodeForParentConnections extends floatingRect{
   constructor(shape){
-    this.topNode = this.drawLinkNode(shape)
+    super(shape,null,null,null,'red','black','15');
   }
 
-  drawLinkNode(shape){
-    let width = shape.width/2;
-    let height = 15;
-    this.x = shape.x + (shape.width/4);
-    this.y = shape.y - 25;
-
-    let topNode = createNewRectangle(null,null,this.x,this.y,width,height,'red','black',15)
-    area.appendChild(topNode);
-    
-    topNode.addEventListener("mousedown",this.parentConnection);
-    return topNode;
+  xFunc(shape){
+    return shape.x + (shape.width/4);
   }
 
-  moveTo(x,y){
-    this.x = x
-    this.y = y
-    this.topNode.setAttribute('x',this.x);
-    this.topNode.setAttribute('y',this.y);
+  yFunc(shape){
+    return shape.y - 25;
   }
 
-  moveByAmount(dx,dy){
-    this.x += dx;
-    this.y += dy;
-    this.topNode.setAttribute('x',this.x);
-    this.topNode.setAttribute('y',this.y);
+  widthFunc(shape){
+    return shape.width/2;
   }
 
-  recalculate(shape){
-    let width = shape.width/2;
-    this.topNode.setAttribute('width',width);
-    let x = shape.x + (shape.width/4);
-    let y = shape.y - 25;
-    this.moveTo(x,y)
+  heightFunc(shape){
+    return 15;
   }
 
-  removeLinkNode(){
-    this.topNode.remove();
-  }
-
-  parentConnection(e){
+  onClickFunc(e){
     if (drawingLink){
       selected.potentialLink.line.remove();
       selected.potentialLink = null;
@@ -483,53 +478,30 @@ class NodeForParentConnections{
 
 
 
-class NodeForChildConnections{
+class NodeForChildConnections extends floatingRect{
   constructor(shape){
-    this.x = 0
-    this.y = 0
-    this.bottomNode = this.drawLinkNode(shape)
+    super(shape,null,null,null,'blue','black','15');
   }
 
-  drawLinkNode(shape){
-    let width = shape.width/2;
-    let height = 15;
-    this.x = shape.x + (shape.width/4);
-    this.y = shape.y + shape.height + 10;
-
-    let bottomNode = createNewRectangle(null,null,this.x,this.y,width,height,'blue','black',15)
-    area.appendChild(bottomNode);
-    
-    bottomNode.addEventListener("mousedown",this.childConnection);
-    return bottomNode
+  xFunc(shape){
+    return shape.x + (shape.width/4);
   }
 
-  moveTo(x,y){
-    this.x = x
-    this.y = y
-    this.bottomNode.setAttribute('x',this.x);
-    this.bottomNode.setAttribute('y',this.y);
+  yFunc(shape){
+    return shape.y + shape.height + 10;
   }
 
-  moveByAmount(dx,dy){
-    this.x += dx;
-    this.y += dy;
-    this.bottomNode.setAttribute('x',this.x);
-    this.bottomNode.setAttribute('y',this.y);
+  widthFunc(shape){
+    return shape.width/2;
   }
 
-  recalculate(shape){
-    let width = shape.width/2;
-    this.bottomNode.setAttribute('width',width);
-    let x = shape.x + (shape.width/4);
-    let y = shape.y + shape.height + 10;
-    this.moveTo(x,y)
+  heightFunc(shape){
+    return 15;
   }
 
-  removeLinkNode(){
-    this.bottomNode.remove();
-  }
 
-  childConnection(e){
+
+  onClickFunc(e){
     if (drawingLink){
       selected.potentialLink.line.remove();
       selected.potentialLink = null;
@@ -543,6 +515,43 @@ class NodeForChildConnections{
     onmousemove = selected.potentialLink.followMouseWithLine.bind(selected.potentialLink);
   }
 } 
+
+
+
+
+class NodeForSelectingWholeGroup extends floatingRect{
+  constructor(shape){
+    super(shape,null,null,null,'white','black','0');
+  }
+
+  xFunc(shape){
+    return shape.x + shape.width + 10
+  }
+
+  yFunc(shape){
+    return shape.y + (shape.height / 10)
+  }
+
+  widthFunc(shape){
+    return shape.height / 6
+  }
+
+  heightFunc(shape){
+    return shape.height / 6;
+  }
+
+  onClickFunc(e){
+    e.stopPropagation();
+    return;
+    selected = new Tree(group)
+    selected.select();
+    startMovement(e);
+  }
+}
+
+
+
+
 
 class elementText{
   constructor(shape,fullText,displayText){
@@ -658,7 +667,7 @@ class Rectangle{
     let newX = adjustX(e.pageX);
     let newWidth = this.width + (this.x - newX);
     
-    if (newWidth >10){
+    if (newWidth > minX){
       this.rect.setAttribute('x',newX);
       this.rect.setAttribute('width',newWidth);
     }
@@ -667,7 +676,7 @@ class Rectangle{
   expandRight(e){
     let newWidth = adjustX(e.pageX) - this.x;
     
-    if (newWidth >10){
+    if (newWidth > minX){
       this.rect.setAttribute('width',newWidth);
     }
   }
@@ -676,7 +685,7 @@ class Rectangle{
     let newY = adjustY(e.pageY);
     let newHeight = this.height + (this.y - newY); 
   
-    if (newHeight >10){
+    if (newHeight > minY){
       this.rect.setAttribute('y',newY);
       this.rect.setAttribute('height',newHeight);
     }
@@ -685,7 +694,7 @@ class Rectangle{
   expandDown(e){
     let newHeight = adjustY(e.pageY) - this.y;
     
-    if (newHeight >10){
+    if (newHeight >minY){
       this.rect.setAttribute('height',newHeight);
     }
   }
@@ -716,6 +725,9 @@ let groupObjects = new Map();
 
 let offsetX = area.getBoundingClientRect().left + window.scrollX
 let offsetY = area.getBoundingClientRect().top + window.scrollY
+
+let minX = 125;
+let minY = 75;
 
 
 //The user clicks on the svg area but no element
@@ -833,7 +845,7 @@ function createNewElement(e){
   newGroup.setAttribute('id',`g${elementsCreated}`)
   area.appendChild(newGroup);
 
-  newRect = createNewRectangle(null,`rect${elementsCreated}`,adjustX(e.pageX),adjustY(e.pageY),0,0,'white','black',0)
+  newRect = createNewRectangle(null,`rect${elementsCreated}`,adjustX(e.pageX)-(minX/2),adjustY(e.pageY)-(minY/2),minX,minY,'white','black',0)
   newGroup.appendChild(newRect);
 
   fullText = ""

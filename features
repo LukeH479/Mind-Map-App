@@ -1,7 +1,12 @@
 Hierachy i.e lower + upper nodes - completed
 Ability to select and delete connections - completed
 ability to double click to select all child elements - completed
-Enter your own text (learn other parts here)
+Enter your own text - completed
+double click leads to editing text, another button leads to grouping
+selecting sees the rectangle turn a different colour and a small icon appears in the middle
+grouping sees a black square drawn around the area
+text appears in the center 
+text clips correctly
 Line has arrow in the middle which when clicked, reverse the direction
 When line is selected, circles appear where it connects with the box
 Zoom in and out with button
