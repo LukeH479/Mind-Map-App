@@ -13,6 +13,29 @@ area = document.getElementById("mySvg");
 area.addEventListener("mousedown", clickOnSVG);
 document.addEventListener("keydown", deleteSelect);
 
+inputBox = document.getElementById('inputBox');
+endWritinginInputForm();
+
+
+inputBox.addEventListener('blur',function(){
+  document.addEventListener("keydown", deleteSelect);
+});
+
+inputBox.addEventListener('focus',function(){
+  document.removeEventListener("keydown", deleteSelect);
+});
+
+
+const form = document.querySelector('form'); 
+ 
+form.addEventListener('submit', function(event) { 
+  event.preventDefault(); 
+  if (selected && selected instanceof Group){
+    selected.text.fullText = inputBox.value
+    selected.text.recalculate(selected.shape);
+  }
+});
+
 class Tree{
   constructor(group){
     this.root = group 
@@ -33,6 +56,7 @@ class Tree{
     for (const x of this.descendants){
       x.select();
     }
+    endWritinginInputForm();
   }
 
   unselect(){
@@ -43,9 +67,7 @@ class Tree{
 
   deleteSelect(){
     for (const x of this.descendants){
-      if (typeof x != 'Link'){
-        x.deleteSelect();
-      }
+      x.deleteSelect();
     }
   }
 
@@ -57,7 +79,14 @@ class Tree{
     }
     this.lastGrabbed = [e.pageX,e.pageY]
   }
+
 }
+
+
+
+
+
+
 
 class Group{
   constructor(id,group,shape,fullText,displayText){
@@ -78,19 +107,50 @@ class Group{
     this.potentialLink = null;
     this.lastGrabbed = [];
   }
+
+  drawBox(e,origX,origY){
+    let width, height;
+    let x , y;
+    let adjX = adjustX(e.pageX);
+    let adjY = adjustY(e.pageY);
+    if (origX < adjX){
+      width = adjX - origX;
+      x = origX
+    }else{
+      width = origX - adjX;
+      x = adjX;
+    }
   
+    if (origY < adjY){
+      height = adjY- origY
+      y = origY
+    }else{
+      height = origY - adjY
+      y = adjY
+    }
+    this.shape.rect.setAttribute("x", x);
+    this.shape.rect.setAttribute("y", y);
+    this.shape.rect.setAttribute("width", width);
+    this.shape.rect.setAttribute("height", height);
+    this.resizedElement(this);
+  
+  }
+
   select() {
     this.drawCircles();
     this.topNode = new NodeForParentConnections(this.shape);
     this.botNode = new NodeForChildConnections(this.shape);
+    startWritinginInputForm(this.text.fullText);
   }
 
   drawCircles(){
     let s = this.shape
     let pos = [[s.x,s.y],[s.x,s.yMid],[s.x,s.yEnd],[s.xMid,s.y],[s.xMid,s.yEnd],[s.xEnd,s.y],[s.xEnd,s.yMid],[s.xEnd,s.yEnd]];
     for (let i = 0; i < 8; i++ ){
-      this.circles[i] = new circleForExpanding(`${this.id}_circ${i}`,pos[i][0],pos[i][1])
-      this.circles[i].circle.addEventListener("mousedown",expand);
+      this.circles[i] = new circleForExpanding(`${this.id}_circ${i}`,pos[i][0],pos[i][1],this.group)
+      if (!creatingNewShape){
+        this.circles[i].circle.addEventListener("mousedown",this.expand.bind(this));
+      }
     }
   }
   
@@ -101,6 +161,11 @@ class Group{
       this.topNode = null;
       this.botNode.removeLinkNode();
       this.botNode = null;
+      this.text.recalculate(this.shape);
+    }
+    if (!inputBox.disabled){
+      this.text.fullText = endWritinginInputForm()
+      this.text.recalculate(this.shape);
     }
     selected = null;
   }
@@ -151,8 +216,38 @@ class Group{
     this.moveChildLinks();
     this.lastGrabbed = [e.pageX,e.pageY]
   }
-  
-  
+
+  expand(e){
+    e.stopPropagation();
+    area.onmouseup = dropElement;
+    switch(e.target){
+      case this.circles[0].circle:
+      area.onmousemove = e => {this.shape.expandUp.bind(this.shape)(e) ;this.shape.expandLeft.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[1].circle:
+        area.onmousemove = e => {this.shape.expandLeft.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[2].circle:
+        area.onmousemove = e => {this.shape.expandDown.bind(this.shape)(e);this.shape.expandLeft.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[3].circle:
+        area.onmousemove = e => {this.shape.expandUp.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[4].circle:
+        area.onmousemove = e => {this.shape.expandDown.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[5].circle:
+        area.onmousemove = e => {this.shape.expandUp.bind(this.shape)(e);this.shape.expandRight.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[6].circle:
+        area.onmousemove = e => {this.shape.expandRight.bind(this.shape)(e); this.resizedElement.bind(this)()};
+        break;
+      case this.circles[7].circle:
+        area.onmousemove = e => {this.shape.expandDown.bind(this.shape)(e);this.shape.expandRight.bind(this.shape)(e); this.resizedElement.bind(this)()};
+    }
+
+  }
+
   resizedElement(){
     this.shape.recalculate();
     this.recalculateCircles();
@@ -188,6 +283,13 @@ class Group{
   }
 }
 
+
+
+
+
+
+
+
 class Link {
   constructor(line,parent,child){
     this.line = line;
@@ -220,8 +322,8 @@ class Link {
   }
 
   drawCircles(){
-    this.circles[0] = new circleForExpanding(null,this.parent.shape.xMid,this.parent.shape.yMid);
-    this.circles[1] = new circleForExpanding(null,this.child.shape.xMid,this.child.shape.yMid)
+    this.circles[0] = new circleForExpanding(null,this.parent.shape.xMid,this.parent.shape.yMid,area);
+    this.circles[1] = new circleForExpanding(null,this.child.shape.xMid,this.child.shape.yMid,area)
   }
   
   removeCircles(){
@@ -240,12 +342,17 @@ class Link {
   
 }
 
+
+
+
+
+
 class circleForExpanding{
-  constructor(id,cx,cy){
+  constructor(id,cx,cy,insertInto){
     this.circle = createNewCircle(null,id,5,cx,cy,'white','black');
     this.cx = cx
     this.cy = cy
-    area.appendChild(this.circle);
+    insertInto.appendChild(this.circle);
   }
 
   moveByAmount(dx,dy){
@@ -267,18 +374,62 @@ class circleForExpanding{
   }
 }
 
-class NodeForParentConnections{
-  constructor(shape){
-    this.x = 0
-    this.y = 0
-    this.topNode = this.drawLinkNodes(shape)
+class floatingRect{
+  constructor(shape,className,id,xFunc,yFunc,widthFunc,heightFunc,onClickFunc,fill,stroke,rx){
+    this.xFunc = xFunc;
+    this.yFunc = yFunc;
+    this.widthFunc = widthFunc;
+    this.heightFunc = heightFunc; 
+
+    this.recalculate(shape);
+
+    this.elem = createNewRectangle(className,id,this.x,this.y,this.width,this.height,fill,stroke,rx)
+    area.appendChild(this.elem)
+    this.elem.addEventListener('mousdown',onClickFunc);
   }
 
-  drawLinkNodes(shape){
+  moveTo(x,y){
+    this.x = x
+    this.y = y
+    this.elem.setAttribute('x',this.x);
+    this.elem.setAttribute('y',this.y);
+  }
+
+  moveByAmount(dx,dy){
+    this.x += dx;
+    this.y += dy;
+    this.elem.setAttribute('x',this.x);
+    this.elem.setAttribute('y',this.y);
+  }
+
+  recalculate(shape){
+    this.x = this.xFunc(shape);
+    this.y = this.yFunc(shape);
+    this.width = this.widthFunc(shape);
+    this.height = this.heightFunc(shape);
+  }
+
+  resizeElement(shape){
+    this.recalculate(shape)
+    this.elem.setAttribute('x',this.x);
+    this.elem.setAttribute('y',this.y);
+    this.elem.setAttribute('width',this.width);
+    this.elem.setAttribute('height',this.height);
+  }
+}
+
+
+
+class NodeForParentConnections{
+  constructor(shape){
+    this.topNode = this.drawLinkNode(shape)
+  }
+
+  drawLinkNode(shape){
     let width = shape.width/2;
-    let height = 10;
+    let height = 15;
     this.x = shape.x + (shape.width/4);
-    this.y = shape.y - 15;
+    this.y = shape.y - 25;
 
     let topNode = createNewRectangle(null,null,this.x,this.y,width,height,'red','black',15)
     area.appendChild(topNode);
@@ -305,7 +456,7 @@ class NodeForParentConnections{
     let width = shape.width/2;
     this.topNode.setAttribute('width',width);
     let x = shape.x + (shape.width/4);
-    let y = shape.y - 15;
+    let y = shape.y - 25;
     this.moveTo(x,y)
   }
 
@@ -320,26 +471,30 @@ class NodeForParentConnections{
     }
     drawingLink = true;
     e.stopPropagation();
-    newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,e.pageX,e.pageY,'red',5);
+    newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.y-15,adjustX(e.pageX),adjustY(e.pageY),'red',5);
     area.appendChild(newLine);
     selected.potentialLink = new PotentialLink(true,newLine);
   
-    onmousemove = followMouseWithLine;
+    onmousemove = selected.potentialLink.followMouseWithLine.bind(selected.potentialLink);
   }
 } 
+
+
+
+
 
 class NodeForChildConnections{
   constructor(shape){
     this.x = 0
     this.y = 0
-    this.bottomNode = this.drawLinkNodes(shape)
+    this.bottomNode = this.drawLinkNode(shape)
   }
 
-  drawLinkNodes(shape){
+  drawLinkNode(shape){
     let width = shape.width/2;
-    let height = 10;
+    let height = 15;
     this.x = shape.x + (shape.width/4);
-    this.y = shape.y + shape.height + 5;
+    this.y = shape.y + shape.height + 10;
 
     let bottomNode = createNewRectangle(null,null,this.x,this.y,width,height,'blue','black',15)
     area.appendChild(bottomNode);
@@ -366,7 +521,7 @@ class NodeForChildConnections{
     let width = shape.width/2;
     this.bottomNode.setAttribute('width',width);
     let x = shape.x + (shape.width/4);
-    let y = shape.y + shape.height + 5;
+    let y = shape.y + shape.height + 10;
     this.moveTo(x,y)
   }
 
@@ -381,11 +536,11 @@ class NodeForChildConnections{
     }
     drawingLink = true;
     e.stopPropagation();
-    newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,e.pageX,e.pageY,'blue',5);
+    newLine = createNewLine("temporary",`${selected.id}_line`,selected.shape.xMid,selected.shape.yEnd+15,adjustX(e.pageX),adjustY(e.pageY),'blue',5);
     area.appendChild(newLine);
     selected.potentialLink = new PotentialLink(false,newLine);
   
-    onmousemove = followMouseWithLine;
+    onmousemove = selected.potentialLink.followMouseWithLine.bind(selected.potentialLink);
   }
 } 
 
@@ -498,6 +653,42 @@ class Rectangle{
     this.recalculate();
     this.lastGrabbed = []
   }
+
+  expandLeft(e){
+    let newX = adjustX(e.pageX);
+    let newWidth = this.width + (this.x - newX);
+    
+    if (newWidth >10){
+      this.rect.setAttribute('x',newX);
+      this.rect.setAttribute('width',newWidth);
+    }
+  }
+  
+  expandRight(e){
+    let newWidth = adjustX(e.pageX) - this.x;
+    
+    if (newWidth >10){
+      this.rect.setAttribute('width',newWidth);
+    }
+  }
+  
+  expandUp(e){
+    let newY = adjustY(e.pageY);
+    let newHeight = this.height + (this.y - newY); 
+  
+    if (newHeight >10){
+      this.rect.setAttribute('y',newY);
+      this.rect.setAttribute('height',newHeight);
+    }
+  }
+  
+  expandDown(e){
+    let newHeight = adjustY(e.pageY) - this.y;
+    
+    if (newHeight >10){
+      this.rect.setAttribute('height',newHeight);
+    }
+  }
 }
 
 
@@ -505,6 +696,11 @@ class PotentialLink{
   constructor(parent,line){
     this.connectingToParent = parent;
     this.line = line;
+  }
+
+  followMouseWithLine(e){
+    this.line.setAttribute('x2',adjustX(e.pageX))
+    this.line.setAttribute('y2',adjustY(e.pageY))
   }
 }
 
@@ -518,8 +714,13 @@ let selected = null;
 
 let groupObjects = new Map();
 
+let offsetX = area.getBoundingClientRect().left + window.scrollX
+let offsetY = area.getBoundingClientRect().top + window.scrollY
+
+
 //The user clicks on the svg area but no element
 function clickOnSVG(e){
+  calculateOffsets();
   if (drawingLink){
     endDrawingLink(); 
   
@@ -534,17 +735,24 @@ function clickOnSVG(e){
     selected.unselect();
 
   }else{
+    creatingNewShape = true;
     selected = createNewElement(e);
     groupObjects.set(selected.group,selected)
     selected.drawCircles();
-    area.onmousemove = (event => drawBox(event,e.pageX,e.pageY));
+    area.onmousemove = (event => selected.drawBox.bind(selected)(event,adjustX(e.pageX),adjustY(e.pageY)));
     elementsCreated++
-    creatingNewShape = true;
   }
+}
+
+function endDrawingLink(){
+  drawingLink = false;
+  selected.potentialLink.line.remove();
+  onmousemove = null
 }
 
 //The user clicks on a shape
 function clickOnElement(e) {
+  calculateOffsets();
   if (creatingNewShape){
     return;
   }
@@ -574,16 +782,16 @@ function startMovement(e){
 }
 
 function dragElement(e){
-  if (typeof selected != 'Link'){
-    selected.dragElement(e)
-  }
+  selected.dragElement(e)
 }
+
 function dropElement() {
   area.onmouseup = null;
   area.onmousemove = null;
 }
 
 function clickOnConnection(e){
+  calculateOffsets();
   if (drawingLink){
     endDrawingLink(); 
     return;
@@ -613,6 +821,7 @@ function deleteSelect(e){
 }
 
 function dbClickOnElement(e){
+  calculateOffsets();
   group = groupObjects.get(e.currentTarget);
   selected = new Tree(group)
   selected.select();
@@ -623,57 +832,17 @@ function createNewElement(e){
   newGroup = document.createElementNS("http://www.w3.org/2000/svg","g");
   newGroup.setAttribute('id',`g${elementsCreated}`)
   area.appendChild(newGroup);
-  newRect = document.createElementNS("http://www.w3.org/2000/svg","rect")
-  newRect.setAttribute('id',`rect${elementsCreated}`)
-  newRect.setAttribute('x',e.pageX)
-  newRect.setAttribute('y',e.pageY)
-  newRect.setAttribute('height',"0")
-  newRect.setAttribute('width',"0")
-  newRect.setAttribute('fill',"white")
-  newRect.setAttribute('stroke',"black")
+
+  newRect = createNewRectangle(null,`rect${elementsCreated}`,adjustX(e.pageX),adjustY(e.pageY),0,0,'white','black',0)
   newGroup.appendChild(newRect);
 
-  fullText = "Lorem ipsum dolor sit amet consectetur adipisicing elit. Saepe obcaecati, omnis est recusandae hic possimus consequatur labore in. Esse dicta sunt, molestiae cum velit expedita ipsa cupiditate modi ea iste!";
+  fullText = ""
   displayText = document.createElementNS("http://www.w3.org/2000/svg","text")
   displayText.setAttribute('id',`text_rect${elementsCreated}`)
   newGroup.appendChild(displayText);
 
   return new Group(`rect${elementsCreated}`,newGroup, new Rectangle(newRect),fullText,displayText);
 }
-
-
-/*
-Functions for creating the element itself
-*/
-function drawBox(e,origX,origY){
-  let width, height;
-  let x , y;
-  if (origX < e.pageX){
-    width = e.pageX - origX;
-    x = origX
-  }else{
-    width = origX - e.pageX;
-    x = e.pageX;
-  }
-
-  if (origY < e.pageY){
-    height = e.pageY - origY
-    y = origY
-  }else{
-    height = origY - e.pageY
-    y = e.pageY
-  }
-  selected.shape.rect.setAttribute("x", x);
-  selected.shape.rect.setAttribute("y", y);
-  selected.shape.rect.setAttribute("width", width);
-  selected.shape.rect.setAttribute("height", height);
-  selected.resizedElement();
-
-}
-
-/*
-* Functions used for creating, moving and deleting circles
- */
 
 
 function createNewCircle(className,id,r,cx,cy,fill,stroke){
@@ -685,6 +854,7 @@ function createNewCircle(className,id,r,cx,cy,fill,stroke){
   newCirc.setAttribute('cy',cy)
   newCirc.setAttribute('fill',fill)
   newCirc.setAttribute('stroke',stroke)
+
   return newCirc;
 }
 
@@ -698,6 +868,7 @@ function createNewLine(className,id,x1,y1,x2,y2,stroke,width){
   newLine.setAttribute('y2',y2);
   newLine.setAttribute('stroke',stroke)
   newLine.setAttribute('stroke-width',width)
+
   return newLine;
 }
 
@@ -716,17 +887,20 @@ function createNewRectangle(className,id,x,y,width,height,fill,stroke,rx){
   return newRect;
 }
 
-
-function followMouseWithLine(e){
-  selected.potentialLink.line.setAttribute('x2',e.pageX)
-  selected.potentialLink.line.setAttribute('y2',e.pageY)
+function calculateOffsets(){
+  offsetX = area.getBoundingClientRect().left + window.scrollX
+  offsetY = area.getBoundingClientRect().top + window.scrollY
 }
 
-function endDrawingLink(){
-  drawingLink = false;
-  selected.potentialLink.line.remove();
-  onmousemove = null
+function adjustX(x){
+  return x - offsetX
 }
+
+function adjustY(y){
+  return y - offsetY
+}
+
+
 
 function connectBox(dest){
   drawingLink = false;
@@ -792,84 +966,19 @@ function updateChildLinks(node){
   }
 }
 
-
-
-
-
-
-/*
-Functions for changing the size of the given element
-*/
-
-function expand(e){
-  e.stopPropagation();
-  area.onmouseup = dropElement;
-  switch(e.target){
-    case selected.circles[0].circle:
-      area.onmousemove = e => {expandUp(e) ;expandLeft(e)};
-      break;
-    case selected.circles[1].circle:
-      area.onmousemove = expandLeft;
-      break;
-    case selected.circles[2].circle:
-      area.onmousemove = e => {expandDown(e) ;expandLeft(e)};
-      break;
-    case selected.circles[3].circle:
-      area.onmousemove = expandUp;
-      break;
-    case selected.circles[4].circle:
-      area.onmousemove = expandDown;
-      break;
-    case selected.circles[5].circle:
-      area.onmousemove = e => {expandUp(e) ;expandRight(e)};
-      break;
-    case selected.circles[6].circle:
-      area.onmousemove = expandRight;
-      break;
-    case selected.circles[7].circle:
-      area.onmousemove = e => {expandDown(e) ;expandRight(e)};
-  }
+function startWritinginInputForm(text){
+  inputBox.value = text
+  inputBox.disabled = false;
 }
 
-
-
-function expandLeft(e){
-  newX = e.pageX;
-  newWidth = selected.shape.width + (selected.shape.x - newX);
+function endWritinginInputForm(){
+  let value = inputBox.value
+  inputBox.disabled = true;
+  inputBox.value = "You must select a box first"
+  return value;
   
-  if (newWidth >10){
-    selected.shape.rect.setAttribute('x',newX);
-    selected.shape.rect.setAttribute('width',newWidth);
-    selected.resizedElement();
-  }
 }
 
-function expandRight(e){
-  newWidth = e.pageX - selected.shape.x;
-  
-  if (newWidth >10){
-    selected.shape.rect.setAttribute('width',newWidth);
-    selected.resizedElement();
-  }
-}
 
-function expandUp(e){
-  newY = e.pageY;
-  newHeight = selected.shape.height + (selected.shape.y - newY); 
 
-  if (newHeight >10){
-    selected.shape.rect.setAttribute('y',newY);
-    selected.shape.rect.setAttribute('height',newHeight);
-    selected.resizedElement();
-  }
-}
-
-function expandDown(e){
-  newHeight = e.pageY - selected.shape.y;
-  
-  if (newHeight >10){
-    selected.shape.rect.setAttribute('height',newHeight);
-    selected.resizedElement();
-  }
-}
 

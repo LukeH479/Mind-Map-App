@@ -9,3 +9,8 @@ line:hover{
 .temporary{
     pointer-events: none;
 }
+
+textarea{
+    height: 4em;
+    width: 100%;
+}
