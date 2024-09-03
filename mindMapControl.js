@@ -30,7 +30,7 @@ const form = document.querySelector('form');
  
 form.addEventListener('submit', function(event) { 
   event.preventDefault(); 
-  if (selected && selected instanceof Group){
+  if (selected && selected instanceof Group && inputBox.disabled == false){
     selected.text.fullText = inputBox.value
     selected.text.recalculate(selected.shape);
   }
@@ -159,12 +159,17 @@ class Group{
    this.drawCircles();
    this.nodeForMoving = new NodeForMoving(this.shape,this.group)
    this.floatingBoxes.push(this.nodeForMoving);
-   this.shape.rect.setAttribute('fill','grey');
+   this.shape.setColour('grey');
+   this.text.displayText.setAttribute("filter","url(#blur)")
+
+
   }
 
   changeText(){
+    this.text.displayText.setAttribute("filter","none")
     startWritinginInputForm(this.text.fullText);
-    this.shape.rect.setAttribute('fill','white');
+    this.shape.setColour('white');
+
     this.nodeForMoving.remove();
   }
 
@@ -183,7 +188,8 @@ class Group{
   
   unselect() {
     this.removeCircles();
-   this.shape.rect.setAttribute('fill','white');
+    this.shape.setColour('white');
+    this.text.displayText.setAttribute("filter","none")
     if (creatingNewShape == false){
       for (const x of this.floatingBoxes){
         x.remove()
@@ -606,6 +612,7 @@ class NodeForSelectingWholeGroup extends floatingRect{
   onClickFunc(e){
     e.stopPropagation();
     if (selected instanceof Group){
+      if (drawingLink) endDrawingLink();
       selected = new Tree(selected)
       selected.select();
     }else{
@@ -635,11 +642,11 @@ class NodeForMoving extends floatingRect{
   }
 
   widthFunc(shape){
-    return Math.min(shape.height / 5, shape.width/5);
+    return Math.min(shape.height / 4, shape.width/4);
   }
 
   heightFunc(shape){
-    return Math.min(shape.height / 5, shape.width/5);
+    return Math.min(shape.height / 4, shape.width/4);
   }
 
   onClickFunc(e){
@@ -676,59 +683,94 @@ class elementText{
   }
   
   recalculate(shape){
-    this.moveTo(shape.x,shape.y)
-    this.fitToBox(shape)
+    if (this.fullText == "") return;
+     
+    this.displayText.innerHTML = "";
+    let textToDisplay = this.fullText.split(" ")
+    let shapeSize = shape.rect.getBBox()
+    let linesOfText = this.generateLines(shape.width - 10, textToDisplay);
+    this.insertLinesOfText(shape,linesOfText,shapeSize.height - 10,shapeSize.width - 10);
   }
 
-  fitToBox(shape){
-    let numLines = shape.height / 12
-    const lines = []
-    let lineLength = shape.width / 8
-    let words = this.fullText.split(" ");
-  
-    this.displayText.replaceChildren();
-  
-    let currLine = 0;
-    let currPos = 0;
+  generateLines(boxWidth,textToDisplay){
+    let linesOfText = []
     let wordLength;
-    for (let i = 0; i < words.length; i++){
-      wordLength = words[i].length;
-      if (currPos + wordLength > lineLength){
-        currPos = wordLength
-        currLine++
-        if (wordLength > lineLength){
-        lines[currLine] = "...";
-          break;
+    let widthUsed = 0; let numberOfLines = 0;
+    for (let i = 0; i < textToDisplay.length; i++){
+      wordLength = this.findTextWidth(textToDisplay[i]+"m"); 
+      if (widthUsed + wordLength > boxWidth){
+        if (wordLength > boxWidth){
+          linesOfText[numberOfLines] = " ..."
+          break; 
         }
-        lines[currLine] = words[i];
+
+        numberOfLines++;
+        linesOfText[numberOfLines] = textToDisplay[i]
+        widthUsed = wordLength;
       }else{
-        if (currLine == 0 && currPos == 0){
-          lines[currLine] = words[i];
+        if (numberOfLines == 0 && widthUsed == 0){
+          linesOfText[numberOfLines] =  textToDisplay[i]
         }else{
-          lines[currLine] += " " + words[i];
+          linesOfText[numberOfLines] += " " + textToDisplay[i]
         }
-        currPos += wordLength;
+        widthUsed += wordLength;
+
       }
     }
-  
-    if (lines[0] == undefined){
-      return 0;
-    }
-  
-    let newText;
-    for (let i = 0; i <= currLine; i++){
-      if (i >= numLines - 1){
-        newText = "<tspan dy = '10' dx = '0' x='"+this.x+"'>...</tspan>";
-        this.displayText.insertAdjacentHTML('beforeend', newText);
-  
-        break;
+    return linesOfText;
+  }
+
+  findTextWidth(text){
+    let testText = createNewTspan(text);
+    this.displayText.appendChild(testText)
+    let textSize = testText.getBBox();
+    testText.remove()
+    return textSize.width
+  }
+
+  insertLinesOfText(shape,linesOfText,height,width){
+    let lineHeight = this.findLineHeight() + 2;
+    let possibleNumberOfLines = Math.floor(height / lineHeight);
+    if (possibleNumberOfLines > linesOfText.length){
+      let startY = shape.yMid - (linesOfText.length / 2) * lineHeight;
+      this.moveTo(shape.xMid,startY)
+      for (let i = 0; i < linesOfText.length; i++){
+        this.displayText.appendChild(createNewTspan(linesOfText[i],null,null,shape.xMid,null,0,lineHeight))
       }
-      newText = "<tspan dy = '10' dx = '0' x='"+this.x+"'>"+lines[i]+"</tspan>";
-      this.displayText.insertAdjacentHTML('beforeend', newText);
+    }else{
+      let startY = shape.y + 5
+      this.moveTo(shape.xMid,startY)
+      this.alterLastLine(linesOfText,possibleNumberOfLines-1,width)
+      for (let i = 0; i < possibleNumberOfLines; i++){
+        this.displayText.appendChild(createNewTspan(linesOfText[i],null,null,shape.xMid,null,0,lineHeight))
+      }
     }
-  
+
+
   }
   
+  findLineHeight(){
+    let testText = createNewTspan("|");
+    this.displayText.appendChild(testText)
+    let textSize = testText.getBBox();
+    testText.remove()
+    return textSize.height;
+  }
+
+  alterLastLine(linesOfText,lastLineToDisplay, width){
+    let lastLine = linesOfText[lastLineToDisplay]
+    let dotsWidth = this.findTextWidth(" ...")
+    if (this.findTextWidth(lastLine) + dotsWidth < width){
+      linesOfText[lastLineToDisplay] += " ..."
+    }else{
+      lastLine = lastLine.slice(lastLine.length - 5);
+      lastLine += " ..."
+      linesOfText[lastLineToDisplay] = lastLine;
+    }
+
+  }
+
+
   removeText(){
     this.displayText.remove();
   }
@@ -795,6 +837,10 @@ class Rectangle{
     if (newHeight >minY){
       this.rect.setAttribute('height',newHeight);
     }
+  }
+
+  setColour(colour){
+    this.rect.setAttribute("fill",colour);
   }
 }
 
@@ -869,7 +915,7 @@ function clickOnElement(e) {
   e.stopPropagation();
   if (drawingLink){
     clickedOnObject = groupObjects.get(e.currentTarget)
-    if (clickedOnObject == selected.group) return;
+    if (clickedOnObject == selected) return;
 
     if(clickedOnObject instanceof Link){
       endDrawingLink(); 
@@ -934,6 +980,8 @@ function createNewElement(e){
   fullText = ""
   displayText = document.createElementNS("http://www.w3.org/2000/svg","text")
   displayText.setAttribute('id',`text_rect${elementsCreated}`)
+  displayText.setAttribute('font-size',"1em");
+  displayText.setAttribute('text-anchor',"middle")
   newGroup.appendChild(displayText);
 
   return new Group(`rect${elementsCreated}`,newGroup, new Rectangle(newRect),fullText,displayText);
@@ -980,6 +1028,20 @@ function createNewRectangle(className,id,x,y,width,height,fill,stroke,rx){
   newRect.setAttribute('rx',rx);
 
   return newRect;
+}
+
+function createNewTspan(text,className,id,x,y,dx,dy){
+  newTspan = document.createElementNS("http://www.w3.org/2000/svg","tspan");
+  newTspan.textContent = text
+  newTspan.setAttribute('class',className);
+  newTspan.setAttribute('id',id);
+  newTspan.setAttribute('x',x);
+  newTspan.setAttribute('y',y);
+  newTspan.setAttribute('dx',dx);
+  newTspan.setAttribute('dy',dy);
+
+
+  return newTspan;
 }
 
 function calculateOffsets(){
@@ -1073,7 +1135,6 @@ function endWritinginInputForm(){
   return value;
   
 }
-
 
 
 
