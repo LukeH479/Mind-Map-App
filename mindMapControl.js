@@ -38,10 +38,11 @@ form.addEventListener('submit', function(event) {
 
 class Tree{
   constructor(group){
-    this.root = group 
+    this.root = group
     selected.unselect();
     this.descendants = []
     this.traverseTree(group);
+    this.descendants.shift();
   }
 
   traverseTree(node){
@@ -53,25 +54,32 @@ class Tree{
   }
 
   select(){
+    this.root.rootSelect();
+    this.root.nodeForGrouping.setColour("#BF40BF");
     for (const x of this.descendants){
-      x.select();
+      x.groupSelect();
     }
     endWritinginInputForm();
   }
 
   unselect(){
+    this.root.unselect();
     for (const x of this.descendants){
       x.unselect();
     }
   }
 
   deleteSelect(){
+    this.root.deleteSelect();
     for (const x of this.descendants){
       x.deleteSelect();
     }
   }
 
   dragElement(e){
+    this.root.lastGrabbed[0] = this.lastGrabbed[0];
+    this.root.lastGrabbed[1] = this.lastGrabbed[1];
+    this.root.dragElement(e); 
     for (const x of this.descendants){
       x.lastGrabbed[0] = this.lastGrabbed[0];
       x.lastGrabbed[1] = this.lastGrabbed[1];
@@ -80,6 +88,11 @@ class Tree{
     this.lastGrabbed = [e.pageX,e.pageY]
   }
 
+  checkClicked(currentTarget){
+    let targetObject = groupObjects.get(currentTarget);
+    let ans = !this.descendants.includes(targetObject) && targetObject != this.root;
+    return ans
+  }
 }
 
 
@@ -105,6 +118,9 @@ class Group{
     this.circles = [];
     this.potentialLink = null;
     this.lastGrabbed = [];
+
+    this.nodeForMoving = null;
+    this.nodeForGrouping = null;
   }
 
   drawBox(e,origX,origY){
@@ -128,11 +144,28 @@ class Group{
   }
 
   select() {
-    this.drawCircles();
-    this.floatingBoxes.push(new NodeForParentConnections(this.shape));
-    this.floatingBoxes.push(new NodeForChildConnections(this.shape));
-    this.floatingBoxes.push(new NodeForSelectingWholeGroup(this.shape))
+    this.rootSelect();
+    this.floatingBoxes.push(new NodeForParentConnections(this.shape,this.group));
+    this.floatingBoxes.push(new NodeForChildConnections(this.shape,this.group));
+  }
+
+  rootSelect(){
+    this.groupSelect();
+    this.nodeForGrouping = new NodeForSelectingWholeGroup(this.shape,this.group);
+    this.floatingBoxes.push(this.nodeForGrouping)
+  }
+
+  groupSelect(){
+   this.drawCircles();
+   this.nodeForMoving = new NodeForMoving(this.shape,this.group)
+   this.floatingBoxes.push(this.nodeForMoving);
+   this.shape.rect.setAttribute('fill','grey');
+  }
+
+  changeText(){
     startWritinginInputForm(this.text.fullText);
+    this.shape.rect.setAttribute('fill','white');
+    this.nodeForMoving.remove();
   }
 
   drawCircles(){
@@ -145,9 +178,12 @@ class Group{
       }
     }
   }
+
+
   
   unselect() {
     this.removeCircles();
+   this.shape.rect.setAttribute('fill','white');
     if (creatingNewShape == false){
       for (const x of this.floatingBoxes){
         x.remove()
@@ -275,6 +311,10 @@ class Group{
       x.line.setAttribute('y1',this.shape.yMid);
     }
   }
+  
+  checkClicked(currentTarget){
+    return currentTarget != this.group;
+  }
 }
 
 
@@ -296,7 +336,11 @@ class Link {
   select(){
     this.drawCircles();
     this.line.setAttribute('stroke','purple')
-    
+  }
+
+  groupSelect(){
+    this.drawCircles();
+    this.line.setAttribute('stroke','purple')
   }
     
   unselect(){
@@ -332,6 +376,10 @@ class Link {
     this.circles[0].moveByAmount(dx,dy);
     this.circles[1].moveByAmount(dx,dy);
     this.lastGrabbed = [e.pageX,e.pageY]
+  }
+
+  checkClicked(currentTarget){
+    return currentTarget != this.line;
   }
   
 }
@@ -373,17 +421,22 @@ class circleForExpanding{
 
 
 class floatingRect{
-  constructor(shape,icon,className,id,fill,stroke,rx){
+  constructor(shape,icon,iconWidth,className,id,fill,stroke,rx,insertInto){
     this.recalculate(shape);
+    this.adjustment = 2;
 
     this.rect = createNewRectangle(className,id,this.x,this.y,this.width,this.height,fill,stroke,rx)
-    area.appendChild(this.rect)
+    insertInto.appendChild(this.rect)
     this.rect.addEventListener('mousedown',this.onClickFunc);
 
     if (icon){
-      this.icon = icon
-      this.setAllAttributes(this.icon)
-      area.appendChild(this.icon)
+      this.icon = document.createElementNS("http://www.w3.org/2000/svg","svg")
+      this.setAllAttributes(this.icon,this.adjustment)
+      this.icon.setAttribute('viewBox',`0 0 ${iconWidth} ${iconWidth}`)
+      this.icon.setAttribute('preserveAspectRatio',"false")
+      insertInto.appendChild(this.icon)
+      this.icon.insertAdjacentHTML("beforeend",icon)
+      this.icon.addEventListener('mousedown',this.onClickFunc);
     }
     
   }
@@ -391,18 +444,18 @@ class floatingRect{
   moveTo(x,y){
     this.x = x
     this.y = y
-    this.setAllAttributes(this.rect);
+    this.setAllAttributes(this.rect,0);
     if (this.icon){
-      this.setAllAttributes(this.icon);
+      this.setAllAttributes(this.icon,this.adjustment);
     }
   }
 
   moveByAmount(dx,dy){
     this.x += dx;
     this.y += dy;
-    this.setAllAttributes(this.rect);
+    this.setAllAttributes(this.rect,0);
     if (this.icon){
-      this.setAllAttributes(this.icon);
+      this.setAllAttributes(this.icon,this.adjustment);
     }
   }
 
@@ -415,17 +468,17 @@ class floatingRect{
 
   resizeElement(shape){
     this.recalculate(shape)
-    this.setAllAttributes(this.rect);
+    this.setAllAttributes(this.rect,0);
     if (this.icon){
-      this.setAllAttributes(this.icon);
+      this.setAllAttributes(this.icon,this.adjustment);
     }
   }
 
-  setAllAttributes(element){
-    element.setAttribute('x',this.x);
-    element.setAttribute('y',this.y);
-    element.setAttribute('width',this.width);
-    element.setAttribute('height',this.height);
+  setAllAttributes(element,adj){
+    element.setAttribute('x',this.x + adj);
+    element.setAttribute('y',this.y + adj);
+    element.setAttribute('width',this.width - (2*adj));
+    element.setAttribute('height',this.height - (2*adj));
   }
 
   remove(){
@@ -434,13 +487,19 @@ class floatingRect{
       this.icon.remove();
     }
   }
+
+  setColour(colour){
+    this.rect.setAttribute("fill",colour);
+  }
 }
 
 
 
 class NodeForParentConnections extends floatingRect{
-  constructor(shape){
-    super(shape,null,null,null,'red','black','15');
+  constructor(shape,insertInto){
+    let icon = ""
+    let iconWidth = 0
+    super(shape,icon,iconWidth,null,null,'red','black','15',insertInto);
   }
 
   xFunc(shape){
@@ -479,8 +538,10 @@ class NodeForParentConnections extends floatingRect{
 
 
 class NodeForChildConnections extends floatingRect{
-  constructor(shape){
-    super(shape,null,null,null,'blue','black','15');
+  constructor(shape,insertInto){
+    let icon = ""
+    let iconWidth = 0
+    super(shape,icon,iconWidth,null,null,'blue','black','15',insertInto);
   }
 
   xFunc(shape){
@@ -520,8 +581,10 @@ class NodeForChildConnections extends floatingRect{
 
 
 class NodeForSelectingWholeGroup extends floatingRect{
-  constructor(shape){
-    super(shape,null,null,null,'white','black','0');
+  constructor(shape,insertInto){
+    let icon = '<use href="#graph" x = "0" y ="0"/>'
+    let iconWidth = 488
+    super(shape,icon,iconWidth,null,null,'white','black','0',insertInto);
   }
 
   xFunc(shape){
@@ -529,23 +592,58 @@ class NodeForSelectingWholeGroup extends floatingRect{
   }
 
   yFunc(shape){
-    return shape.y + (shape.height / 10)
+    return shape.y + 5
   }
 
   widthFunc(shape){
-    return shape.height / 6
+    return Math.min(shape.height / 6, shape.width/6);
   }
 
   heightFunc(shape){
-    return shape.height / 6;
+    return Math.min(shape.height / 6, shape.width/6);
   }
 
   onClickFunc(e){
     e.stopPropagation();
-    return;
-    selected = new Tree(group)
-    selected.select();
-    startMovement(e);
+    if (selected instanceof Group){
+      selected = new Tree(selected)
+      selected.select();
+    }else{
+      let group = selected.root;
+      selected.unselect();
+      group.select();
+      selected = group;
+    }
+  }
+}
+
+
+
+class NodeForMoving extends floatingRect{
+  constructor(shape,insertInto){
+    let icon =  '<use href="#fourArrows" x = "0" y ="0"/>'
+    let iconWidth = 23.5
+    super(shape,icon,iconWidth,null,null,'none','none','0',insertInto);
+  }
+
+  xFunc(shape){
+    return shape.x + shape.width / 2 - (this.widthFunc(shape) / 2);
+  }
+
+  yFunc(shape){
+    return shape.y + shape.height / 2 - (this.heightFunc(shape) / 2);
+  }
+
+  widthFunc(shape){
+    return Math.min(shape.height / 5, shape.width/5);
+  }
+
+  heightFunc(shape){
+    return Math.min(shape.height / 5, shape.width/5);
+  }
+
+  onClickFunc(e){
+
   }
 }
 
@@ -771,15 +869,19 @@ function clickOnElement(e) {
   e.stopPropagation();
   if (drawingLink){
     clickedOnObject = groupObjects.get(e.currentTarget)
-    if (clickedOnObject != selected.group){
-      connectBox(clickedOnObject);
+    if (clickedOnObject == selected.group) return;
+
+    if(clickedOnObject instanceof Link){
+      endDrawingLink(); 
+      return;
     }
+    connectBox(clickedOnObject);
     return;
   }
   if (selected == null){
     selected = groupObjects.get(e.currentTarget);
     selected.select();
-  }else if (groupObjects.get(e.currentTarget) != selected){
+  }else if (selected.checkClicked(e.currentTarget)){
     selected.unselect();
     selected = groupObjects.get(e.currentTarget);
     selected.select();
@@ -802,24 +904,6 @@ function dropElement() {
   area.onmousemove = null;
 }
 
-function clickOnConnection(e){
-  calculateOffsets();
-  if (drawingLink){
-    endDrawingLink(); 
-    return;
-  }else if (creatingNewShape){
-    return;
-  }
-  e.stopPropagation();
-  if (selected == null){
-    selected = groupObjects.get(e.currentTarget);
-    selected.select();
-  }else if (groupObjects.get(e.currentTarget) != selected){
-    selected.unselect();
-    selected = groupObjects.get(e.currentTarget);
-    selected.select();
-  }
-}
 
 function deleteSelect(e){
   if (drawingLink == true){
@@ -833,11 +917,10 @@ function deleteSelect(e){
 }
 
 function dbClickOnElement(e){
-  calculateOffsets();
-  group = groupObjects.get(e.currentTarget);
-  selected = new Tree(group)
-  selected.select();
-  startMovement(e);
+  if (selected instanceof Group){
+    selected.changeText();
+    inputBox.focus();
+  }
 }
 
 function createNewElement(e){
@@ -948,7 +1031,7 @@ function establishLink(parentElement,childElement){
   childElement.tier = parentElement.tier + 1
   newLine = createNewLine("permanent",`line_${parentElement.id}_${childElement.id}`,parentElement.shape.xMid,parentElement.shape.yMid,childElement.shape.xMid,childElement.shape.yMid,colourArray[parentElement.tier],12 * (1/(parentElement.tier+1)));
   area.prepend(newLine);
-  newLine.addEventListener("mousedown",clickOnConnection);
+  newLine.addEventListener("mousedown",clickOnElement);
   let lineElem = new Link(newLine,parentElement,childElement);
   groupObjects.set(newLine,lineElem)
   parentElement.children.set(childElement, lineElem);
@@ -986,7 +1069,7 @@ function startWritinginInputForm(text){
 function endWritinginInputForm(){
   let value = inputBox.value
   inputBox.disabled = true;
-  inputBox.value = "You must select a box first"
+  inputBox.value = "Double click on a box to edit its text"
   return value;
   
 }
