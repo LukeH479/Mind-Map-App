@@ -93,6 +93,20 @@ class Tree{
     let ans = !this.descendants.includes(targetObject) && targetObject != this.root;
     return ans
   }
+
+  startMovement(){
+    this.root.startMovement();
+    for (const x of this.descendants){
+      x.startMovement();
+    }
+  }
+
+  endMovement(){
+    this.root.endMovement();
+    for (const x of this.descendants){
+      x.endMovement();
+    }
+  }
 }
 
 
@@ -157,20 +171,13 @@ class Group{
 
   groupSelect(){
    this.drawCircles();
-   this.nodeForMoving = new NodeForMoving(this.shape,this.group)
-   this.floatingBoxes.push(this.nodeForMoving);
-   this.shape.setColour('grey');
-   this.text.displayText.setAttribute("filter","url(#blur)")
-
-
   }
 
   changeText(){
     this.text.displayText.setAttribute("filter","none")
     startWritinginInputForm(this.text.fullText);
-    this.shape.setColour('white');
 
-    this.nodeForMoving.remove();
+
   }
 
   drawCircles(){
@@ -188,8 +195,6 @@ class Group{
   
   unselect() {
     this.removeCircles();
-    this.shape.setColour('white');
-    this.text.displayText.setAttribute("filter","none")
     if (creatingNewShape == false){
       for (const x of this.floatingBoxes){
         x.remove()
@@ -321,6 +326,22 @@ class Group{
   checkClicked(currentTarget){
     return currentTarget != this.group;
   }
+
+  startMovement(){
+    this.shape.setColour("grey")
+    this.text.displayText.setAttribute("filter","url(#blur)")
+    this.nodeForMoving = new NodeForMoving(this.shape,this.group)
+    this.floatingBoxes.push(this.nodeForMoving); 
+  }
+
+  endMovement(){
+    this.shape.setColour("white")
+    this.text.displayText.setAttribute("filter","none")
+    if (this.nodeForMoving){
+      this.nodeForMoving.remove();
+      this.nodeForMoving = null;
+    }
+  }
 }
 
 
@@ -386,6 +407,12 @@ class Link {
 
   checkClicked(currentTarget){
     return currentTarget != this.line;
+  }
+
+  startMovement(){
+  }
+
+  endMovement(){
   }
   
 }
@@ -602,11 +629,11 @@ class NodeForSelectingWholeGroup extends floatingRect{
   }
 
   widthFunc(shape){
-    return Math.min(shape.height / 6, shape.width/6);
+    return Math.min(shape.height / 8, shape.width/8);
   }
 
   heightFunc(shape){
-    return Math.min(shape.height / 6, shape.width/6);
+    return Math.min(shape.height / 8, shape.width/8);
   }
 
   onClickFunc(e){
@@ -873,6 +900,7 @@ let offsetY = area.getBoundingClientRect().top + window.scrollY
 let minX = 125;
 let minY = 75;
 
+let timeOutId = 0
 
 //The user clicks on the svg area but no element
 function clickOnSVG(e){
@@ -937,6 +965,7 @@ function clickOnElement(e) {
 
 function startMovement(e){
   selected.lastGrabbed = [e.pageX,e.pageY];
+  timeOutId = setTimeout(selected.startMovement.bind(selected),200);
   area.onmousemove = dragElement;
   area.onmouseup = (e => {dragElement(e); dropElement(e)});
 }
@@ -946,6 +975,8 @@ function dragElement(e){
 }
 
 function dropElement() {
+  clearTimeout(timeOutId);
+  selected.endMovement();
   area.onmouseup = null;
   area.onmousemove = null;
 }
