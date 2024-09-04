@@ -366,7 +366,6 @@ class Link {
   }
 
   groupSelect(){
-    this.drawCircles();
     this.line.setAttribute('stroke','purple')
   }
     
@@ -387,22 +386,57 @@ class Link {
   }
 
   drawCircles(){
-    this.circles[0] = new circleForExpanding(null,this.parent.shape.xMid,this.parent.shape.yMid,area);
-    this.circles[1] = new circleForExpanding(null,this.child.shape.xMid,this.child.shape.yMid,area)
+    let interceptPos = this.calculateIntercept(this.parent,this.child)
+    this.circles[0] = new circleForExpanding(null,interceptPos[0],interceptPos[1],area);
+
+    interceptPos = this.calculateIntercept(this.child,this.parent)
+    this.circles[1] = new circleForExpanding(null,interceptPos[0],interceptPos[1],area)
+  }
+
+  calculateIntercept(boxCut,otherEnd){
+    let m = (otherEnd.shape.yMid - boxCut.shape.yMid) / (otherEnd.shape.xMid - boxCut.shape.xMid)
+    let c = boxCut.shape.yMid - (m * boxCut.shape.xMid)
+
+    let x, y
+    //Top Wall
+    y = boxCut.shape.y
+    x = this.calcX(y,m,c)
+    if (x > boxCut.shape.x && x < boxCut.shape.xEnd && boxCut.shape.yMid > otherEnd.shape.yMid) return[x,y]
+
+    //Bottom Wall
+    y = boxCut.shape.yEnd
+    x = this.calcX(y,m,c)
+    if (x > boxCut.shape.x && x < boxCut.shape.xEnd && boxCut.shape.yMid < otherEnd.shape.yMid) return[x,y]
+
+    //Left Wall
+    x = boxCut.shape.x
+    y = this.calcY(x,m,c)
+    if (y > boxCut.shape.y && y < boxCut.shape.yEnd && boxCut.shape.xMid > otherEnd.shape.xMid) return[x,y]
+
+    //Right Wall
+    x = boxCut.shape.xEnd
+    y = this.calcY(x,m,c)
+    if (y > boxCut.shape.y && y < boxCut.shape.yEnd && boxCut.shape.xMid < otherEnd.shape.xMid) return[x,y]
+  }
+
+  calcX(y, m ,c){
+    return (y-c) / m
+  }
+
+  calcY(x,m,c){
+    return m * x + c
   }
   
   removeCircles(){
+    if (this.circles.length == 0) return;
+
     this.circles[0].removeCircle();
     this.circles[1].removeCircle();
     this.circles = []
   }
 
   dragElement(e){
-    let dx = e.pageX - this.lastGrabbed[0]
-    let dy = e.pageY - this.lastGrabbed[1]
-    this.circles[0].moveByAmount(dx,dy);
-    this.circles[1].moveByAmount(dx,dy);
-    this.lastGrabbed = [e.pageX,e.pageY]
+
   }
 
   checkClicked(currentTarget){
@@ -414,10 +448,9 @@ class Link {
 
   endMovement(){
   }
-  
+
+
 }
-
-
 
 
 
@@ -713,8 +746,13 @@ class elementText{
     if (this.fullText == "") return;
      
     this.displayText.innerHTML = "";
-    let textToDisplay = this.fullText.split(" ")
+
+    let textToDisplay = this.fullText.replaceAll("\r\n","\n")
+    textToDisplay = textToDisplay.replaceAll("\r","\n")
+    textToDisplay = textToDisplay.replaceAll("\n"," \n ")
+    textToDisplay = textToDisplay.split(" ")
     let shapeSize = shape.rect.getBBox()
+
     let linesOfText = this.generateLines(shape.width - 10, textToDisplay);
     this.insertLinesOfText(shape,linesOfText,shapeSize.height - 10,shapeSize.width - 10);
   }
@@ -725,7 +763,7 @@ class elementText{
     let widthUsed = 0; let numberOfLines = 0;
     for (let i = 0; i < textToDisplay.length; i++){
       wordLength = this.findTextWidth(textToDisplay[i]+"m"); 
-      if (widthUsed + wordLength > boxWidth){
+      if (widthUsed + wordLength > boxWidth || textToDisplay[i] == "\n"){
         if (wordLength > boxWidth){
           linesOfText[numberOfLines] = " ..."
           break; 
