@@ -42,7 +42,7 @@ class Tree{
     selected.unselect();
     this.descendants = []
     this.traverseTree(group);
-    this.descendants.shift();
+    this.descendants.shift(); // removes the root from the array
   }
 
   traverseTree(node){
@@ -259,6 +259,8 @@ class Group{
 
   expand(e){
     e.stopPropagation();
+    if (e.button != 0) return;
+
     area.onmouseup = dropElement;
     switch(e.target){
       case this.circles[0].circle:
@@ -358,11 +360,16 @@ class Link {
     this.child = child;
     this.lastGrabbed = []
     this.circles = [];
+    this.directionArrow = null;
+    this.interceptPosParent = []
+    this.interceptPosChild = []
   }
 
   select(){
     this.drawCircles();
     this.line.setAttribute('stroke','purple')
+    this.directionArrow = new NodeFoReversingLink(this.parent, this.child, this.interceptPosParent, this.interceptPosChild);
+
   }
 
   groupSelect(){
@@ -372,6 +379,7 @@ class Link {
   unselect(){
     this.removeCircles();
     this.line.setAttribute('stroke',colourArray[this.parent.tier])
+    this.directionArrow.remove();
     selected = null;
   }
     
@@ -386,11 +394,11 @@ class Link {
   }
 
   drawCircles(){
-    let interceptPos = this.calculateIntercept(this.parent,this.child)
-    this.circles[0] = new circleForExpanding(null,interceptPos[0],interceptPos[1],area);
+    this.interceptPosParent = this.calculateIntercept(this.parent,this.child)
+    this.circles[0] = new circleForExpanding(null,this.interceptPosParent[0],this.interceptPosParent[1],area);
 
-    interceptPos = this.calculateIntercept(this.child,this.parent)
-    this.circles[1] = new circleForExpanding(null,interceptPos[0],interceptPos[1],area)
+    this.interceptPosChild = this.calculateIntercept(this.child,this.parent)
+    this.circles[1] = new circleForExpanding(null,this.interceptPosChild[0],this.interceptPosChild[1],area)
   }
 
   calculateIntercept(boxCut,otherEnd){
@@ -585,6 +593,8 @@ class NodeForParentConnections extends floatingRect{
   }
 
   onClickFunc(e){
+    if (e.button != 0) return;
+
     if (drawingLink){
       selected.potentialLink.line.remove();
       selected.potentialLink = null;
@@ -629,6 +639,7 @@ class NodeForChildConnections extends floatingRect{
 
 
   onClickFunc(e){
+    if (e.button != 0) return;
     if (drawingLink){
       selected.potentialLink.line.remove();
       selected.potentialLink = null;
@@ -671,6 +682,8 @@ class NodeForSelectingWholeGroup extends floatingRect{
 
   onClickFunc(e){
     e.stopPropagation();
+    if (e.button != 0) return;
+
     if (selected instanceof Group){
       if (drawingLink) endDrawingLink();
       selected = new Tree(selected)
@@ -714,6 +727,103 @@ class NodeForMoving extends floatingRect{
   }
 }
 
+class NodeFoReversingLink{
+  constructor(parentElement,childElement,interceptOne,interceptTwo){
+    this.interceptOne = interceptOne
+    this.interceptTwo = interceptTwo
+    this.parentElement = parentElement
+    this.childElement = childElement
+    this.recalculate();
+
+    let x1 = 20
+    let y1 = 0
+
+    let heightOfSegment = Math.sin(Math.PI / 6) * 20
+    let y2 = heightOfSegment + 20
+    let y3 = heightOfSegment + 20
+
+    let widthOfTriangle = 2 * ((20 ** 2 - heightOfSegment ** 2) ** 0.5)
+
+    let changeInX = (widthOfTriangle ** 2 - y2 ** 2) ** 0.5
+
+    let x2 = x1 - changeInX
+    let x3 = x1 + changeInX
+    
+
+    this.triangle = `<polygon points = "${x1},${y1} ${x2},${y2} ${x3},${y3}" fill="purple" stroke ="black">`
+    this.svg = `<svg viewBox = "0 0 20 20" height ="${this.height}" width ="${this.width}" x ="${this.x}" y="${this.y}></svg>"`
+    area.insertAdjacentHTML("beforeend",this.svg);
+
+
+
+    this.svg = document.createElementNS("http://www.w3.org/2000/svg","svg")
+    this.svg.setAttribute("viewBox",`0 0 40 40`)
+    this.svg.setAttribute("height",this.height)
+    this.svg.setAttribute("width",this.width)
+    this.svg.setAttribute("x",this.x)
+    this.svg.setAttribute("y",this.y)
+
+
+  
+    area.appendChild(this.svg)
+
+    this.svg.insertAdjacentHTML("beforeend",this.triangle)
+    this.triangle = this.svg.firstChild;
+
+    this.rotateElement();
+    this.svg.addEventListener('mousedown',this.onClickFunc);
+  }
+
+  xFunc(){
+    return (this.interceptOne[0] + this.interceptTwo[0]) / 2 - (this.widthFunc() /2)
+  }
+
+  yFunc(){
+    return (this.interceptOne[1] + this.interceptTwo[1]) / 2 - (this.heightFunc() /2)
+  }
+
+  widthFunc(){
+    return (1/(this.parentElement.tier+1)) * 40 
+  }
+
+  heightFunc(){
+    return (1/(this.parentElement.tier+1)) * 40 
+    }
+
+  onClickFunc(e){
+    establishLink(this.childElement,this.parentElement)
+
+  }
+
+  recalculate(){
+    this.x = this.xFunc();
+    this.y = this.yFunc();
+    this.width = this.widthFunc();
+    this.height = this.heightFunc();
+  }
+
+  remove(){
+    this.svg.remove();
+  }
+
+  rotateElement(){
+    let x = 20
+    let y = 20
+
+    let dy = this.childElement.shape.yMid - this.parentElement.shape.yMid
+    let dx = this.childElement.shape.xMid - this.parentElement.shape.xMid
+
+    let theta = Math.atan(dy / dx) * (180 / Math.PI)
+    theta += 90
+    if (this.childElement.shape.xMid < this.parentElement.shape.xMid){
+    theta += 180
+    }
+    console.log(theta)
+
+
+    this.triangle.setAttribute("transform",`rotate(${theta},${x},${y})`)
+  }
+}
 
 
 
@@ -942,6 +1052,8 @@ let timeOutId = 0
 
 //The user clicks on the svg area but no element
 function clickOnSVG(e){
+  if (e.button != 0) return;
+
   calculateOffsets();
   if (drawingLink){
     endDrawingLink(); 
@@ -974,6 +1086,8 @@ function endDrawingLink(){
 
 //The user clicks on a shape
 function clickOnElement(e) {
+  if (e.button != 0) return ;
+
   calculateOffsets();
   if (creatingNewShape){
     return;
@@ -1032,6 +1146,8 @@ function deleteSelect(e){
 }
 
 function dbClickOnElement(e){
+  if (e.button != 0) return;
+
   if (selected instanceof Group){
     selected.changeText();
     inputBox.focus();

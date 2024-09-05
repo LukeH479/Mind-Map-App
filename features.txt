@@ -7,9 +7,12 @@ selecting sees the rectangle turn a different colour and a small icon appears in
 text appears in the center - completed
 text clips correctly - completed
 blur text when element is selected - completed
-Line has arrow in the middle which when clicked, reverse the direction
-When line is selected, circles appear where it connects with the box - completd
+When line is selected, circles appear where it connects with the box - completed
+Line has arrow in the middle which when clicked, reverse the direction - started
+Left click with the mouse will not register
+
 Zoom in and out with button
+
 Customise text
 More shapes, including potentially making your own
 Automatic layout
