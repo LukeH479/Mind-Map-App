@@ -8,8 +8,8 @@ text appears in the center - completed
 text clips correctly - completed
 blur text when element is selected - completed
 When line is selected, circles appear where it connects with the box - completed
-Line has arrow in the middle which when clicked, reverse the direction - started
-Left click with the mouse will not register
+Line has arrow in the middle which when clicked, reverse the direction - completed
+Left click with the mouse will not register - completed
 
 Zoom in and out with button
 

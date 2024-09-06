@@ -363,17 +363,22 @@ class Link {
     this.directionArrow = null;
     this.interceptPosParent = []
     this.interceptPosChild = []
+    this.individualSelect;
   }
 
   select(){
     this.drawCircles();
     this.line.setAttribute('stroke','purple')
-    this.directionArrow = new NodeFoReversingLink(this.parent, this.child, this.interceptPosParent, this.interceptPosChild);
+    this.directionArrow = new NodeFoReversingLink(this.parent, this.child, this.interceptPosParent, this.interceptPosChild,true);
+    this.individualSelect = true;
 
   }
 
   groupSelect(){
     this.line.setAttribute('stroke','purple')
+    this.directionArrow = new NodeFoReversingLink(this.parent, this.child, this.calculateIntercept(this.parent,this.child), this.calculateIntercept(this.child,this.parent),false);
+    this.individualSelect = false;
+    
   }
     
   unselect(){
@@ -444,7 +449,12 @@ class Link {
   }
 
   dragElement(e){
+    //if it has been idividually selected
+    if (this.individualSelect == true) return;
 
+    let dx = e.pageX - this.lastGrabbed[0]
+    let dy = e.pageY - this.lastGrabbed[1]
+    this.directionArrow.moveByAmount(dx,dy)
   }
 
   checkClicked(currentTarget){
@@ -728,7 +738,7 @@ class NodeForMoving extends floatingRect{
 }
 
 class NodeFoReversingLink{
-  constructor(parentElement,childElement,interceptOne,interceptTwo){
+  constructor(parentElement,childElement,interceptOne,interceptTwo,reversable){
     this.interceptOne = interceptOne
     this.interceptTwo = interceptTwo
     this.parentElement = parentElement
@@ -771,7 +781,11 @@ class NodeFoReversingLink{
     this.triangle = this.svg.firstChild;
 
     this.rotateElement();
-    this.svg.addEventListener('mousedown',this.onClickFunc);
+    if (reversable) {
+      this.svg.addEventListener('mousedown',this.onClickFunc.bind(this));
+    } else {
+      this.svg.addEventListener('mousedown',e => {startMovement(e); e.stopPropagation()});
+    }
   }
 
   xFunc(){
@@ -788,10 +802,22 @@ class NodeFoReversingLink{
 
   heightFunc(){
     return (1/(this.parentElement.tier+1)) * 40 
-    }
+  }
+
+  moveByAmount(dx,dy){
+    this.x += dx
+    this.y += dy
+    this.svg.setAttribute('x',this.x);
+    this.svg.setAttribute('y',this.y);
+  }
 
   onClickFunc(e){
-    establishLink(this.childElement,this.parentElement)
+    e.stopPropagation();
+    this.childElement.parent[1].unselect();
+    establishLink(this.childElement,this.parentElement);
+    selected = this.parentElement.parent[1]
+    selected.select();
+
 
   }
 
@@ -818,8 +844,6 @@ class NodeFoReversingLink{
     if (this.childElement.shape.xMid < this.parentElement.shape.xMid){
     theta += 180
     }
-    console.log(theta)
-
 
     this.triangle.setAttribute("transform",`rotate(${theta},${x},${y})`)
   }
@@ -1154,6 +1178,16 @@ function dbClickOnElement(e){
   }
 }
 
+
+
+
+
+
+
+
+
+
+
 function createNewElement(e){
   newGroup = document.createElementNS("http://www.w3.org/2000/svg","g");
   newGroup.setAttribute('id',`g${elementsCreated}`)
@@ -1254,7 +1288,8 @@ function connectBox(dest){
     establishLink(dest,selected);
   }else{
     establishLink(selected,dest);
-  }  
+  }
+}
 
 function establishLink(parentElement,childElement){
   ancestor = isAncestor(parentElement,childElement)
@@ -1297,7 +1332,6 @@ function isAncestor(parentElement,childElement){
   return null;
 }
 
-}
 
 function updateChildLinks(node){
   for (const x of node.children.keys()) {
